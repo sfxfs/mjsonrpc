@@ -1,10 +1,10 @@
-# mjsonrpc - A JSON-RPC 2.0 Lightweight Server based on cJSON
+# mjsonrpc - A Minimal JSON-RPC 2.0 Server Middle-layer based on cJSON
 
 [中文](README_CN.md)
 
 ### Introduction
 
-Designed for embedded systems, it can be used for various communication methods (TCP, UDP, serial), with simple usage (only three function functions), and supports batch calls and custom error messages.
+Designed for embedded systems, it can be used for various communication methods (TCP, UDP, serial), with simple usage (only three function functions), and supports batch calls (JSON Array) and custom error messages.
 
 ### Functions
 
