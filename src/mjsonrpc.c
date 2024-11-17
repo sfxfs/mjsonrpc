@@ -24,12 +24,12 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+
 #include "mjsonrpc.h"
 
 #define JRPC_VERSION "2.0"
 
-#ifdef MJSONRPC_USE_MUTEX
+#if MJSONRPC_USE_MUTEX
 #define MUTEX_LOCK(mutex) pthread_mutex_lock(&mutex)
 #define MUTEX_UNLOCK(mutex) pthread_mutex_unlock(&mutex)
 #else

@@ -26,9 +26,8 @@
 #define MJSONRPC_H
 
 #include "cJSON.h"
-#ifdef MJSONRPC_USE_MUTEX
-#include <pthread.h>
-#endif
+
+#define MJSONRPC_USE_MUTEX      0
 
 #define JRPC_PARSE_ERROR        -32700
 #define JRPC_INVALID_REQUEST    -32600
@@ -65,11 +64,15 @@ struct mjrpc_cb_info
     void *data;
 };
 
+#if MJSONRPC_USE_MUTEX
+#include <pthread.h>
+#endif
+
 typedef struct rpc_handle
 {
     int info_count;
     struct mjrpc_cb_info *infos;
-#ifdef MJSONRPC_USE_MUTEX
+#if MJSONRPC_USE_MUTEX
     pthread_mutex_t mutex;
 #endif
 } mjrpc_handle_t;
