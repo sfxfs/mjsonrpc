@@ -4,7 +4,7 @@
 
 ### Introduction
 
-Designed for embedded systems, it can be used for various communication methods (TCP, UDP, serial), with simple usage (only three function functions), and supports batch calls (JSON Array) and custom error messages.
+Designed for embedded systems, it can be used for various communication methods (TCP, UDP, serial), with simple usage (only three function functions), and supports batch calls (JSON Array) and custom error messages. The cJSON version used for testing is 1.7.x, availability is not guaranteed for versions below this.
 
 ### Functions
 
