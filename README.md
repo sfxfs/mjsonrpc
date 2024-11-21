@@ -64,3 +64,7 @@ int main()
 }
 ```
 
+### Special Thanks
+
+[hmng/jsonrpc-c](https://github.com/hmng/jsonrpc-c) A library for a C program to receive JSON-RPC requests on tcp sockets
+
