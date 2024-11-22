@@ -12,7 +12,7 @@ cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 int main()
 {
     // Initialize mjrpc_handle_t
-    mjrpc_handle_t handle = {0};
+    mjrpc_handler_t handle = {0};
 
     // Add a method
     mjrpc_add_method(&handle, hello_world, "hello", NULL);
@@ -22,9 +22,10 @@ int main()
     char *json_response = NULL;
 
     // Process the request
-    int result = mjrpc_process(&handle, json_request, &json_response);
+    int result;
+    json_response = mjrpc_process_str(&handle, json_request, &result);
 
-    if (result == MJRPC_OK)
+    if (result == MJRPC_RET_OK)
     {
         printf("Response: %s\n", json_response);
         free(json_response);
