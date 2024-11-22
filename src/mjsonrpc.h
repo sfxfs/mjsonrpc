@@ -22,28 +22,25 @@
     SOFTWARE.
 */
 
-#ifndef MJSONRPC_H
-#define MJSONRPC_H
+#ifndef _MJSONRPC_H_
+#define _MJSONRPC_H_
 
 #include "cJSON.h"
 
-#define MJSONRPC_USE_MUTEX      0
-
-#define JRPC_PARSE_ERROR        -32700
-#define JRPC_INVALID_REQUEST    -32600
-#define JRPC_METHOD_NOT_FOUND   -32601
-#define JRPC_INVALID_PARAMS     -32603
-#define JRPC_INTERNAL_ERROR     -32693
-
+#define JSON_RPC_2_0_PARSE_ERROR        -32700
+#define JSON_RPC_2_0_INVALID_REQUEST    -32600
+#define JSON_RPC_2_0_METHOD_NOT_FOUND   -32601
+#define JSON_RPC_2_0_INVALID_PARAMS     -32603
+#define JSON_RPC_2_0_INTERNAL_ERROR     -32693
 // -32000 to -32099 Reserved for implementation-defined server-errors.
 
 enum mjrpc_error_return
 {
-    MJRPC_OK,
-    MJRPC_ERROR_MEM_ALLOC_FAILED,
-    MJRPC_ERROR_NOT_FOUND,
-    MJRPC_ERROR_EMPTY_REQUST,
-    MJRPC_ERROR_PARSE_FAILED,
+    MJRPC_RET_OK,
+    MJRPC_RET_ERROR_MEM_ALLOC_FAILED,
+    MJRPC_RET_ERROR_NOT_FOUND,
+    MJRPC_RET_ERROR_EMPTY_REQUST,
+    MJRPC_RET_ERROR_PARSE_FAILED,
 };
 
 typedef struct
@@ -53,55 +50,39 @@ typedef struct
     char *error_message;
 } mjrpc_ctx_t;
 
-typedef cJSON *(*mjrpc_function)(mjrpc_ctx_t *context,
+typedef cJSON *(*mjrpc_func)(mjrpc_ctx_t *context,
                                  cJSON *params,
                                  cJSON *id);
 
-struct mjrpc_cb_info
+struct mjrpc_cb
 {
     char *name;
-    mjrpc_function function;
-    void *data;
+    mjrpc_func function;
+    void *arg;
 };
 
-#if MJSONRPC_USE_MUTEX
-#include <pthread.h>
-#endif
-
-typedef struct rpc_handle
+typedef struct mjrpc_handler
 {
-    int info_count;
-    struct mjrpc_cb_info *infos;
-#if MJSONRPC_USE_MUTEX
-    pthread_mutex_t mutex;
-#endif
-} mjrpc_handle_t;
+    int cb_count;
+    struct mjrpc_cb *cb_array;
+} mjrpc_handler_t;
 
-/**
- * @brief Used to add the callback function
- * @param handle Operation handle
- * @param function_pointer Function to be called
- * @param name Method name
- * @param data Data passed to the function when called
- * @return Returns the mjrpc error code
- */
-int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_function function_pointer, char *name, void *data);
+cJSON *mjrpc_response_ok(cJSON *result, cJSON *id);
 
-/**
- * @brief Used to delete the callback function
- * @param handle Operation handle
- * @param name Method name
- * @return Returns the mjrpc error code
- */
-int mjrpc_del_method(mjrpc_handle_t *handle, char *name);
+cJSON *mjrpc_response_error(int code, char *message, cJSON *id);
 
-/**
- * @brief Function for processing RPC request strings
- * @param handle Operation handle
- * @param json_request Request string
- * @param json_return_ptr Pointer to receive the response string
- * @return Returns the mjrpc error code
- */
-int mjrpc_process(mjrpc_handle_t *handle, const char *json_reqeust, char **json_return_ptr);
+int mjrpc_add_method(mjrpc_handler_t *handler,
+                        mjrpc_func function_pointer,
+                        char *method_name, void *arg2func);
+
+int mjrpc_del_method(mjrpc_handler_t *handler, char *method_name);
+
+char *mjrpc_process_str(mjrpc_handler_t *handler,
+                            const char *reqeust_str,
+                            int *ret_code);
+
+cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
+                            cJSON *request_cjson,
+                            int *ret_code);
 
 #endif

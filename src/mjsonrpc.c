@@ -22,131 +22,36 @@
     SOFTWARE.
 */
 
+#include "mjsonrpc.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "mjsonrpc.h"
-
-#define JRPC_VERSION "2.0"
-
-#if MJSONRPC_USE_MUTEX
-#define MUTEX_LOCK(mutex) pthread_mutex_lock(&mutex)
-#define MUTEX_UNLOCK(mutex) pthread_mutex_unlock(&mutex)
-#else
-#define MUTEX_LOCK(mutex)
-#define MUTEX_UNLOCK(mutex)
-#endif
-
-int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_function function_pointer, char *name, void *data)
+cJSON *mjrpc_response_ok(cJSON *result, cJSON *id)
 {
-    MUTEX_LOCK(handle->mutex);
+    if (id == NULL || result == NULL)
+        return NULL;
 
-    int i = handle->info_count++;
-    if (!handle->infos)
-    {
-        handle->infos = malloc(sizeof(struct mjrpc_cb_info));
-        if (!handle->infos)
-        {
-            MUTEX_UNLOCK(handle->mutex);
-            return MJRPC_ERROR_MEM_ALLOC_FAILED;
-        }
-    }
-    else
-    {
-        struct mjrpc_cb_info *ptr = realloc(handle->infos, sizeof(struct mjrpc_cb_info) * handle->info_count);
-        if (!ptr)
-        {
-            MUTEX_UNLOCK(handle->mutex);
-            return MJRPC_ERROR_MEM_ALLOC_FAILED;
-        }
-        handle->infos = ptr;
-    }
-    if ((handle->infos[i].name = strdup(name)) == NULL)
-    {
-        MUTEX_UNLOCK(handle->mutex);
-        return MJRPC_ERROR_MEM_ALLOC_FAILED;
-    }
-    handle->infos[i].function = function_pointer;
-    handle->infos[i].data = data;
+    cJSON *result_root = cJSON_CreateObject();
+    if (result_root == NULL)
+        return NULL;
 
-    MUTEX_UNLOCK(handle->mutex);
-    return MJRPC_OK;
+    cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
+    cJSON_AddItemToObject(result_root, "result", result);
+    cJSON_AddItemToObject(result_root, "id", id);
+
+    return result_root;
 }
 
-static void cb_info_destroy(struct mjrpc_cb_info *info)
+cJSON *mjrpc_response_error(int code, char *message, cJSON *id)
 {
-    if (info->name)
-    {
-        free(info->name);
-        info->name = NULL;
-    }
-    if (info->data)
-    {
-        free(info->data);
-        info->data = NULL;
-    }
-}
+    if (id == NULL)
+        return NULL;
 
-int mjrpc_del_method(mjrpc_handle_t *handle, char *name)
-{
-    MUTEX_LOCK(handle->mutex);
-
-    int i;
-    int found = 0;
-    if (handle->infos)
-    {
-        for (i = 0; i < handle->info_count; i++)
-        {
-            if (found)
-            {
-                handle->infos[i - 1] = handle->infos[i];
-            }
-            else if (!strcmp(name, handle->infos[i].name))
-            {
-                found = 1;
-                cb_info_destroy(&(handle->infos[i]));
-            }
-        }
-        if (found)
-        {
-            handle->info_count--;
-            if (handle->info_count)
-            {
-                struct mjrpc_cb_info *ptr = realloc(handle->infos, sizeof(struct mjrpc_cb_info) * handle->info_count);
-                if (!ptr)
-                {
-                    MUTEX_UNLOCK(handle->mutex);
-                    return MJRPC_ERROR_MEM_ALLOC_FAILED;
-                }
-                handle->infos = ptr;
-            }
-            else
-            {
-                free(handle->infos);
-                handle->infos = NULL;
-            }
-        }
-    }
-    else
-    {
-        MUTEX_UNLOCK(handle->mutex);
-        return MJRPC_ERROR_NOT_FOUND;
-    }
-
-    MUTEX_UNLOCK(handle->mutex);
-    return MJRPC_OK;
-}
-
-static cJSON *rpc_err(mjrpc_handle_t *handle, int code, char *message, cJSON *id)
-{
     cJSON *result_root = cJSON_CreateObject();
     cJSON *error_root = cJSON_CreateObject();
     if (result_root == NULL || error_root == NULL)
-    {
-        cJSON_Delete(result_root);
-        cJSON_Delete(error_root);
         return NULL;
-    }
 
     cJSON_AddNumberToObject(error_root, "code", code);
     if (message)
@@ -155,154 +60,216 @@ static cJSON *rpc_err(mjrpc_handle_t *handle, int code, char *message, cJSON *id
         free(message);
     }
 
-    cJSON_AddStringToObject(result_root, "jsonrpc", JRPC_VERSION);
+    cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
     cJSON_AddItemToObject(result_root, "error", error_root);
-
-    if (id)
-    {
-        cJSON_AddItemToObject(result_root, "id", id);
-    }
-    else
-    {
-        cJSON_AddItemToObject(result_root, "id", cJSON_CreateNull());
-    }
+    cJSON_AddItemToObject(result_root, "id", id);
 
     return result_root;
 }
 
-static cJSON *rpc_ok(cJSON *result, cJSON *id)
-{
-    cJSON *result_root = cJSON_CreateObject();
-
-    cJSON_AddStringToObject(result_root, "jsonrpc", JRPC_VERSION);
-
-    cJSON_AddItemToObject(result_root, "result", result);
-
-    if (id)
-    {
-        cJSON_AddItemToObject(result_root, "id", id);
-    }
-    else
-    {
-        cJSON_AddItemToObject(result_root, "id", cJSON_CreateNull());
-    }
-
-    return result_root;
-}
-
-static cJSON *invoke_procedure(mjrpc_handle_t *handle, char *name, cJSON *params, cJSON *id)
+static cJSON *invoke_callback(mjrpc_handler_t *handler,
+                              char *method_name, cJSON *params, cJSON *id)
 {
     cJSON *returned = NULL;
     int procedure_found = 0;
     mjrpc_ctx_t ctx;
     ctx.error_code = 0;
     ctx.error_message = NULL;
-    int i = handle->info_count;
+    int i = handler->cb_count;
     while (i--)
-    {
-        if (!strcmp(handle->infos[i].name, name))
+        if (!strcmp(handler->cb_array[i].name, method_name))
         {
             procedure_found = 1;
-            ctx.data = handle->infos[i].data;
-            returned = handle->infos[i].function(&ctx, params, id);
+            ctx.data = handler->cb_array[i].arg;
+            returned = handler->cb_array[i].function(&ctx, params, id);
             break;
         }
-    }
+
     if (!procedure_found)
+        return mjrpc_response_error(JSON_RPC_2_0_METHOD_NOT_FOUND,
+                                    strdup("Method not found."), id);
+    else if (ctx.error_code)
+        return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    else
+        return mjrpc_response_ok(returned, id);
+}
+
+static cJSON *rpc_handle_obj_req(mjrpc_handler_t *handler, cJSON *request)
+{
+    cJSON *version, *method, *params, *id;
+
+    id = cJSON_GetObjectItem(request, "id");
+    if (id == NULL)
+        return NULL;
+    if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Number)
     {
-        return rpc_err(handle, JRPC_METHOD_NOT_FOUND, strdup("Method not found."), id);
+        cJSON *id_copy = NULL;
+        id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) : cJSON_CreateNumber(id->valueint);
+
+        version = cJSON_GetObjectItem(request, "jsonrpc");
+        if (version == NULL || version->type != cJSON_String || strcmp("2.0", version->valuestring) != 0)
+            return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+                                        strdup("Valid request received: JSONRPC version error."), id_copy);
+
+        method = cJSON_GetObjectItem(request, "method");
+        if (method != NULL && method->type == cJSON_String)
+        {
+            params = cJSON_GetObjectItem(request, "params");
+
+            return invoke_callback(handler, method->valuestring, params, id_copy);
+        }
+        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+                                    strdup("Valid request received: No 'method' member"), id_copy);
     }
     else
-    {
-        if (ctx.error_code)
-        {
-            return rpc_err(handle, ctx.error_code, ctx.error_message, id);
-        }
-        else
-        {
-            return rpc_ok(returned, id);
-        }
-    }
+        return NULL;
 }
 
-static cJSON *rpc_invoke_method(mjrpc_handle_t *handle, cJSON *request)
-{
-    cJSON *method, *params, *id;
-
-    if (strcmp("2.0", cJSON_GetObjectItem(request, "jsonrpc")->valuestring) != 0)
-    {
-        return rpc_err(handle, JRPC_INVALID_REQUEST, strdup("Valid request received: JSONRPC version error."), NULL);
-    }
-
-    method = cJSON_GetObjectItem(request, "method");
-    if (method != NULL && method->type == cJSON_String)
-    {
-        params = cJSON_GetObjectItem(request, "params");
-
-        id = cJSON_GetObjectItem(request, "id");
-        if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Number)
-        {
-            // We have to copy ID because using it on the reply and deleting the response Object will also delete ID
-            cJSON *id_copy = NULL;
-            if (id != NULL)
-            {
-                id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) : cJSON_CreateNumber(id->valueint);
-            }
-            return invoke_procedure(handle, method->valuestring, params, id_copy);
-        }
-        return rpc_err(handle, JRPC_INVALID_REQUEST, strdup("Valid request received: No 'id' member"), NULL);
-    }
-    return rpc_err(handle, JRPC_INVALID_REQUEST, strdup("Valid request received: No 'method' member"), NULL);
-}
-
-static cJSON *rpc_invoke_method_array(mjrpc_handle_t *handle, cJSON *request)
+static cJSON *rpc_handle_ary_req(mjrpc_handler_t *handler, cJSON *request)
 {
     int array_size = cJSON_GetArraySize(request);
     if (array_size <= 0)
-    {
-        return rpc_err(handle, JRPC_INVALID_REQUEST, strdup("Valid request received: Empty JSON array."), NULL);
-    }
+        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+                                    strdup("Valid request received: Empty JSON array."), cJSON_CreateNull());
 
     cJSON *return_json_array = cJSON_CreateArray();
     for (int i = 0; i < array_size; i++)
-    {
-        cJSON_AddItemToArray(return_json_array, rpc_invoke_method(handle, cJSON_GetArrayItem(request, i)));
-    }
+        cJSON_AddItemToArray(return_json_array, rpc_handle_obj_req(handler, cJSON_GetArrayItem(request, i)));
 
     return return_json_array;
 }
 
-int mjrpc_process(mjrpc_handle_t *handle, const char *json_reqeust, char **json_return_ptr)
+// ----------------------------------------------------------------------------
+
+int mjrpc_add_method(mjrpc_handler_t *handler,
+                     mjrpc_func function_pointer,
+                     char *method_name, void *arg2func)
 {
-    if (json_reqeust == NULL)
+    int i = handler->cb_count++;
+    if (!handler->cb_array)
     {
-        return MJRPC_ERROR_EMPTY_REQUST;
-    }
-
-    cJSON *request = cJSON_Parse(json_reqeust);
-    if (request == NULL)
-    {
-        *json_return_ptr = cJSON_PrintUnformatted(rpc_err(handle, JRPC_PARSE_ERROR, strdup("Parse error: Not in JSON format."), NULL));
-        return MJRPC_ERROR_PARSE_FAILED;
-    }
-
-    cJSON *cjson_return = NULL;
-    if (request->type == cJSON_Array)
-    {
-        cjson_return = rpc_invoke_method_array(handle, request);
-    }
-    else if (request->type == cJSON_Object)
-    {
-        cjson_return = rpc_invoke_method(handle, request);
+        handler->cb_array = malloc(sizeof(struct mjrpc_cb));
+        if (!handler->cb_array)
+            return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
     }
     else
     {
-        cjson_return = rpc_err(handle, JRPC_INVALID_REQUEST, strdup("Valid request received: Not a JSON object or array."), NULL);
+        struct mjrpc_cb *ptr = realloc(handler->cb_array, sizeof(struct mjrpc_cb) * handler->cb_count);
+        if (!ptr)
+            return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+        handler->cb_array = ptr;
+    }
+    if ((handler->cb_array[i].name = strdup(method_name)) == NULL)
+        return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+    handler->cb_array[i].function = function_pointer;
+    handler->cb_array[i].arg = arg2func;
+
+    return MJRPC_RET_OK;
+}
+
+static void cb_info_destroy(struct mjrpc_cb *info)
+{
+    if (info->name)
+    {
+        free(info->name);
+        info->name = NULL;
+    }
+    if (info->arg)
+    {
+        free(info->arg);
+        info->arg = NULL;
+    }
+}
+
+int mjrpc_del_method(mjrpc_handler_t *handler, char *name)
+{
+    int i;
+    int found = 0;
+    if (handler->cb_array)
+    {
+        for (i = 0; i < handler->cb_count; i++)
+        {
+            if (found)
+            {
+                handler->cb_array[i - 1] = handler->cb_array[i];
+            }
+            else if (!strcmp(name, handler->cb_array[i].name))
+            {
+                found = 1;
+                cb_info_destroy(&(handler->cb_array[i]));
+            }
+        }
+        if (found)
+        {
+            handler->cb_count--;
+            if (handler->cb_count)
+            {
+                struct mjrpc_cb *ptr = realloc(handler->cb_array, sizeof(struct mjrpc_cb) * handler->cb_count);
+                if (!ptr)
+                    return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+
+                handler->cb_array = ptr;
+            }
+            else
+            {
+                free(handler->cb_array);
+                handler->cb_array = NULL;
+            }
+        }
+    }
+    else
+        return MJRPC_RET_ERROR_NOT_FOUND;
+
+    return MJRPC_RET_OK;
+}
+
+char *mjrpc_process_str(mjrpc_handler_t *handler,
+                        const char *reqeust_str,
+                        int *ret_code)
+{
+    cJSON *request = cJSON_Parse(reqeust_str);
+    cJSON *response = mjrpc_process_cjson(handler, request, ret_code);
+    cJSON_Delete(request);
+    if (response)
+    {
+        char *response_str = cJSON_PrintUnformatted(response);
+        cJSON_Delete(response);
+        return response_str;
+    }
+    return NULL;
+}
+
+cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
+                           cJSON *request_cjson,
+                           int *ret_code)
+{
+    int ret = MJRPC_RET_OK;
+    if (handler == NULL || request_cjson == NULL)
+    {
+        ret = MJRPC_RET_ERROR_EMPTY_REQUST;
+        if (ret_code)
+            *ret_code = ret;
+        return NULL;
     }
 
-    *json_return_ptr = cJSON_PrintUnformatted(cjson_return);
-    cJSON_Delete(cjson_return);
-    cJSON_Delete(request);
-
-    return MJRPC_OK;
+    cJSON *cjson_return = NULL;
+    if (request_cjson->type == cJSON_Array)
+    {
+        cjson_return = rpc_handle_ary_req(handler, request_cjson);
+        ret = MJRPC_RET_OK;
+    }
+    else if (request_cjson->type == cJSON_Object)
+    {
+        cjson_return = rpc_handle_obj_req(handler, request_cjson);
+        ret = MJRPC_RET_OK;
+    }
+    else
+    {
+        cjson_return = mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+                               strdup("Valid request received: Not a JSON object or array."), cJSON_CreateNull());
+        ret = MJRPC_RET_ERROR_PARSE_FAILED;
+    }
+    if (ret_code)
+        *ret_code = ret;
+    return cjson_return;
 }
