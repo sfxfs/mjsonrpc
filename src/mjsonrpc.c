@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 cJSON *mjrpc_response_ok(cJSON *result, cJSON *id)
 {
     if (id == NULL || result == NULL)
@@ -89,8 +90,10 @@ static cJSON *invoke_callback(mjrpc_handler_t *handler,
         return mjrpc_response_error(JSON_RPC_2_0_METHOD_NOT_FOUND,
                                     strdup("Method not found."), id);
     else if (ctx.error_code)
+        // Error in callback, custom error code and message
         return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
     else
+        // No error in callback, return the result
         return mjrpc_response_ok(returned, id);
 }
 
@@ -100,6 +103,7 @@ static cJSON *rpc_handle_obj_req(mjrpc_handler_t *handler, cJSON *request)
 
     id = cJSON_GetObjectItem(request, "id");
     if (id == NULL)
+        // No id, this is a notification
         return NULL;
     if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Number)
     {
@@ -122,6 +126,7 @@ static cJSON *rpc_handle_obj_req(mjrpc_handler_t *handler, cJSON *request)
                                     strdup("Valid request received: No 'method' member"), id_copy);
     }
     else
+        // Invalid id type
         return NULL;
 }
 
@@ -132,14 +137,26 @@ static cJSON *rpc_handle_ary_req(mjrpc_handler_t *handler, cJSON *request)
         return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
                                     strdup("Valid request received: Empty JSON array."), cJSON_CreateNull());
 
+    int valid_reqs = 0;
     cJSON *return_json_array = cJSON_CreateArray();
     for (int i = 0; i < array_size; i++)
-        cJSON_AddItemToArray(return_json_array, rpc_handle_obj_req(handler, cJSON_GetArrayItem(request, i)));
+    {
+        cJSON *obj_req = rpc_handle_obj_req(handler, cJSON_GetArrayItem(request, i));
+        if (obj_req)
+        {
+            cJSON_AddItemToArray(return_json_array, obj_req);
+            valid_reqs ++;
+        }
+    }
 
-    return return_json_array;
+    if (valid_reqs != 0)
+        return return_json_array;
+    // all requests are notifications or invalid
+    return NULL;
 }
 
 // ----------------------------------------------------------------------------
+// main functions
 
 int mjrpc_add_method(mjrpc_handler_t *handler,
                      mjrpc_func function_pointer,
@@ -246,10 +263,12 @@ cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
     int ret = MJRPC_RET_OK;
     if (handler == NULL || request_cjson == NULL)
     {
-        ret = MJRPC_RET_ERROR_EMPTY_REQUST;
+        // Empty object or array or empty request
+        ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
         if (ret_code)
             *ret_code = ret;
-        return NULL;
+        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+                                    strdup("Valid request received: Empty request."), cJSON_CreateNull());
     }
 
     cJSON *cjson_return = NULL;
@@ -266,7 +285,7 @@ cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
     else
     {
         cjson_return = mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
-                               strdup("Valid request received: Not a JSON object or array."), cJSON_CreateNull());
+                                            strdup("Valid request received: Not a JSON object or array."), cJSON_CreateNull());
         ret = MJRPC_RET_ERROR_PARSE_FAILED;
     }
     if (ret_code)
