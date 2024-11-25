@@ -1,70 +1,97 @@
-# mjsonrpc - A Minimal JSON-RPC 2.0 Server Middle-layer based on cJSON
-
-[中文](README_CN.md)
+# mjsonrpc - A Minimal JSON-RPC 2.0 Server Middleware Based on cJSON
 
 ### Introduction
 
-Designed for embedded systems, it can be used for various communication methods (TCP, UDP, serial), with simple usage (only three function functions), and supports batch calls (JSON Array) and custom error messages. The cJSON version used for testing is 1.7.x, availability is not guaranteed for versions below this.
+This middleware is suitable for Linux systems and can be integrated with various communication methods (TCP, UDP, serial). It is easy to use (with only a few functional functions) and supports batch calls (JSON Array) as well as custom error messages. The tested version of cJSON is `1.7.18`; versions lower or higher than this may not be guaranteed to work.
 
 ### Functions
 
-1. Add callback function
+1. Construct a Normal Response Object
 
-```c
-int mjrpc_add_method(mjrpc_handle_t *handle,
-                     mjrpc_function function_pointer,
-                     char *name, void *data);
-```
+    ```c
+    cJSON *mjrpc_response_ok(cJSON *result, cJSON *id);
+    ```
 
-2. Delete callback function
+2. Construct an Error Response Object
 
-```c
-int mjrpc_del_method(mjrpc_handle_t *handle, char *name);
-```
+    ```c
+    cJSON *mjrpc_response_error(int code, char *message, cJSON *id);
+    ```
 
-3. Parse strings and call corresponding functions
+3. Add a Method
 
-```c
-int mjrpc_process(mjrpc_handle_t *handle,
-                  const char *json_request,
-                  char **json_return_ptr);
-```
+    ```c
+    int mjrpc_add_method(mjrpc_handler_t *handler,
+                         mjrpc_func function_pointer,
+                         char *method_name, void *arg2func);
+    ```
+
+4. Delete a Method
+
+    ```c
+    int mjrpc_del_method(mjrpc_handler_t *handler, char *method_name);
+    ```
+
+5. Process Request String
+
+    ```c
+    char *mjrpc_process_str(mjrpc_handler_t *handler,
+                            const char *request_str,
+                            int *ret_code);
+    ```
+
+6. Process Request cJSON Structure
+
+    ```c
+    cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
+                               cJSON *request_cjson,
+                               int *ret_code);
+    ```
 
 ### Example
 
 ```c
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "mjsonrpc.h"
 
-mjrpc_handle_t handle; // Should be initialized to 0
-
-const char jsonrpc_request_str[] = "{\"jsonrpc\": \"2.0\", \"method\": \"subtract\", \"params\": [42, 23], \"id\": 1}";
-
-cJSON *subtract_handler(mjrpc_ctx_t *ctx, cJSON *params, cJSON *id)
+// Define a simple JSON-RPC method
+cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 {
-    //...
+    cJSON *result = cJSON_CreateString("Hello, World!");
+    return result;
 }
 
 int main()
 {
-    char *ret_str;
-    int ret_code;
+    // Initialize mjrpc_handle_t
+    mjrpc_handler_t handle = {0};
 
-    mjrpc_add_method(&handle,
-                     subtract_handler, // Callback function pointer
-                     "subtract", // Method name
-                     NULL); // Parameters passed to the callback function
-    ret_code = mjrpc_process(&handle,
-                             jsonrpc_request_str, // JSON-RPC request string
-                             &ret_str); // Return JSON string result
+    // Add a method
+    mjrpc_add_method(&handle, hello_world, "hello", NULL);
 
-    printf("return code: %d, return str: %s\n", ret_code, ret_str);
+    // Construct a JSON-RPC request
+    const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1}";
+    char *json_response = NULL;
 
-    free(ret_str); // Don't forget to free memory
+    // Process the request
+    int result;
+    json_response = mjrpc_process_str(&handle, json_request, &result);
+
+    if (result == MJRPC_RET_OK)
+    {
+        printf("Response: %s\n", json_response);
+        free(json_response);
+    }
+    else
+    {
+        printf("Error processing request: %d\n", result);
+    }
+
+    // Cleanup
+    mjrpc_del_method(&handle, "hello");
+
     return 0;
 }
 ```
-
-### Special Thanks
-
-[hmng/jsonrpc-c](https://github.com/hmng/jsonrpc-c) A library for a C program to receive JSON-RPC requests on tcp sockets
-
