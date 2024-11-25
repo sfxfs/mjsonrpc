@@ -7,7 +7,7 @@ cJSON *add(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 {
     if (params == NULL || cJSON_GetArraySize(params) != 2)
     {
-        context->error_code = JRPC_INVALID_PARAMS;
+        context->error_code = JSON_RPC_2_0_INVALID_PARAMS;
         context->error_message = strdup("Invalid params: Expected two numbers.");
         return NULL;
     }
@@ -22,7 +22,7 @@ cJSON *add(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 int main()
 {
     // Initialize mjrpc_handle_t
-    mjrpc_handle_t handle = {0};
+    mjrpc_handler_t handle = {0};
 
     // Add a method
     mjrpc_add_method(&handle, add, "add", NULL);
@@ -32,9 +32,9 @@ int main()
     char *json_response = NULL;
 
     // Process the request
-    int result = mjrpc_process(&handle, json_request, &json_response);
+    int result = mjrpc_process_str(&handle, json_request, &json_response);
 
-    if (result == MJRPC_OK)
+    if (result == MJRPC_RET_OK)
     {
         printf("Response: %s\n", json_response);
         free(json_response);
