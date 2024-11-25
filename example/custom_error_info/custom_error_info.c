@@ -37,10 +37,10 @@ int main()
 
     // Construct a JSON-RPC request with valid parameters
     const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"divide\",\"params\":[10, 2],\"id\":1}";
-    char *json_response = NULL;
+    int result;
 
     // Process the request
-    int result = mjrpc_process_str(&handle, json_request, &json_response);
+    char *json_response = mjrpc_process_str(&handle, json_request, &result);
 
     if (result == MJRPC_RET_OK)
     {
@@ -54,7 +54,7 @@ int main()
 
     // Construct a JSON-RPC request with invalid parameters (division by zero)
     json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"divide\",\"params\":[10, 0],\"id\":2}";
-    result = mjrpc_process_str(&handle, json_request, &json_response);
+    json_response = mjrpc_process_str(&handle, json_request, &result);
 
     if (result == MJRPC_RET_OK)
     {

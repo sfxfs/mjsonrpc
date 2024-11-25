@@ -27,10 +27,10 @@ int main()
 
     // Construct a JSON-RPC request
     const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
-    char *json_response = NULL;
+    int result;
 
     // Process the request
-    int result = mjrpc_process_str(&handle, json_request, &json_response);
+    char *json_response = mjrpc_process_str(&handle, json_request, &result);
 
     if (result == MJRPC_RET_OK)
     {
@@ -47,7 +47,7 @@ int main()
 
     // Attempt to call the deleted method
     json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
-    result = mjrpc_process_str(&handle, json_request, &json_response);
+    json_response = mjrpc_process_str(&handle, json_request, &result);
 
     if (result == MJRPC_RET_OK)
     {
