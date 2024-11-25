@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "mjsonrpc.h"
 
 // Define a JSON-RPC method with parameters
@@ -29,10 +30,10 @@ int main()
 
     // Construct a JSON-RPC request with parameters
     const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[2, 3],\"id\":1}";
-    char *json_response = NULL;
+    int result;
 
     // Process the request
-    int result = mjrpc_process_str(&handle, json_request, &json_response);
+    char *json_response = mjrpc_process_str(&handle, json_request, &result);
 
     if (result == MJRPC_RET_OK)
     {

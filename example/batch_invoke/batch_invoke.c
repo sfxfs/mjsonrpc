@@ -27,10 +27,10 @@ int main()
 
     // Construct a batch JSON-RPC request
     const char *json_request = "[{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":2}]";
-    char *json_response = NULL;
 
     // Process the request
-    int result = mjrpc_process_str(&handle, json_request, &json_response);
+    int result;
+    char *json_response = mjrpc_process_str(&handle, json_request, &result);
 
     if (result == MJRPC_RET_OK)
     {
