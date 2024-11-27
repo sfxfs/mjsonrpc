@@ -95,3 +95,9 @@ int main()
     return 0;
 }
 ```
+
+### References
+
+[JSON-RPC Official Docs](https://www.jsonrpc.org/specification)
+
+[jsonrpc-c](https://github.com/hmng/jsonrpc-c)
