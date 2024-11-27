@@ -96,3 +96,8 @@ int main()
 }
 ```
 
+### 参考
+
+[JSON-RPC Official Docs](https://www.jsonrpc.org/specification)
+
+[jsonrpc-c](https://github.com/hmng/jsonrpc-c)
