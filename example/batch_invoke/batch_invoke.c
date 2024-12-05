@@ -32,14 +32,15 @@ int main()
     int result;
     char *json_response = mjrpc_process_str(&handle, json_request, &result);
 
-    if (result == MJRPC_RET_OK)
+    if (result != MJRPC_RET_OK)
+    {
+        printf("Error processing request: %d\n", result);
+    }
+
+    if (json_response)
     {
         printf("Response: %s\n", json_response);
         free(json_response);
-    }
-    else
-    {
-        printf("Error processing request: %d\n", result);
     }
 
     // Cleanup
