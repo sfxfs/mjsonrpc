@@ -21,7 +21,7 @@ cJSON *mjrpc_response_error(int code, char *message, cJSON *id);
 3. 添加方法
 
 ```c
-int mjrpc_add_method(mjrpc_handler_t *handler,
+int mjrpc_add_method(mjrpc_handle_t *handle,
                      mjrpc_func function_pointer,
                      char *method_name, void *arg2func);
 ```
@@ -29,13 +29,13 @@ int mjrpc_add_method(mjrpc_handler_t *handler,
 4. 删除方法
 
 ```c
-int mjrpc_del_method(mjrpc_handler_t *handler, char *method_name);
+int mjrpc_del_method(mjrpc_handle_t *handle, char *method_name);
 ```
 
 5. 处理请求字符串
 
 ```c
-char *mjrpc_process_str(mjrpc_handler_t *handler,
+char *mjrpc_process_str(mjrpc_handle_t *handle,
                         const char *reqeust_str,
                         int *ret_code);
 ```
@@ -43,7 +43,7 @@ char *mjrpc_process_str(mjrpc_handler_t *handler,
 6. 处理请求 cJSON 结构体
 
 ```c
-cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
+cJSON *mjrpc_process_cjson(mjrpc_handle_t *handle,
                            cJSON *request_cjson,
                            int *ret_code);
 ```
@@ -66,7 +66,7 @@ cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 int main()
 {
     // Initialize mjrpc_handle_t
-    mjrpc_handler_t handle = {0};
+    mjrpc_handle_t handle = {0};
 
     // Add a method
     mjrpc_add_method(&handle, hello_world, "hello", NULL);

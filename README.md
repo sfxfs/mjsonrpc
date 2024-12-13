@@ -1,5 +1,7 @@
 # mjsonrpc - A Minimal JSON-RPC 2.0 Server Middleware Based on cJSON
 
+English | [中文](README_CN.md)
+
 ### Introduction
 
 This middleware is suitable for Linux systems and can be integrated with various communication methods (TCP, UDP, serial). It is easy to use (with only a few functional functions) and supports batch calls (JSON Array) as well as custom error messages. The tested version of cJSON is `1.7.18`; versions lower or higher than this may not be guaranteed to work.
@@ -21,7 +23,7 @@ This middleware is suitable for Linux systems and can be integrated with various
 3. Add a Method
 
     ```c
-    int mjrpc_add_method(mjrpc_handler_t *handler,
+    int mjrpc_add_method(mjrpc_handle_t *handle,
                          mjrpc_func function_pointer,
                          char *method_name, void *arg2func);
     ```
@@ -29,13 +31,13 @@ This middleware is suitable for Linux systems and can be integrated with various
 4. Delete a Method
 
     ```c
-    int mjrpc_del_method(mjrpc_handler_t *handler, char *method_name);
+    int mjrpc_del_method(mjrpc_handle_t *handle, char *method_name);
     ```
 
 5. Process Request String
 
     ```c
-    char *mjrpc_process_str(mjrpc_handler_t *handler,
+    char *mjrpc_process_str(mjrpc_handle_t *handle,
                             const char *request_str,
                             int *ret_code);
     ```
@@ -43,7 +45,7 @@ This middleware is suitable for Linux systems and can be integrated with various
 6. Process Request cJSON Structure
 
     ```c
-    cJSON *mjrpc_process_cjson(mjrpc_handler_t *handler,
+    cJSON *mjrpc_process_cjson(mjrpc_handle_t *handle,
                                cJSON *request_cjson,
                                int *ret_code);
     ```
@@ -66,7 +68,7 @@ cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 int main()
 {
     // Initialize mjrpc_handle_t
-    mjrpc_handler_t handle = {0};
+    mjrpc_handle_t handle = {0};
 
     // Add a method
     mjrpc_add_method(&handle, hello_world, "hello", NULL);

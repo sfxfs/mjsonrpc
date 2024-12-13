@@ -12,7 +12,7 @@ cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 int main()
 {
     // Initialize mjrpc_handle_t
-    mjrpc_handler_t handle = {0};
+    mjrpc_handle_t handle = {0};
 
     // Add a method
     mjrpc_add_method(&handle, hello_world, "hello", NULL);
