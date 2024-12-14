@@ -8,7 +8,7 @@ cJSON *divide(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
 {
     if (params == NULL || cJSON_GetArraySize(params) != 2)
     {
-        context->error_code = JSON_RPC_2_0_INVALID_PARAMS;
+        context->error_code = JSON_RPC_CODE_INVALID_PARAMS;
         context->error_message = strdup("Invalid params: Expected two numbers.");
         return NULL;
     }
