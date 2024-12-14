@@ -53,7 +53,6 @@ cJSON *mjrpc_process_cjson(mjrpc_handle_t *handle,
 ```c
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
@@ -79,14 +78,15 @@ int main()
     int result;
     json_response = mjrpc_process_str(&handle, json_request, &result);
 
-    if (result == MJRPC_RET_OK)
+    if (result != MJRPC_RET_OK)
+    {
+        printf("Error processing request: %d\n", result);
+    }
+
+    if (json_response)
     {
         printf("Response: %s\n", json_response);
         free(json_response);
-    }
-    else
-    {
-        printf("Error processing request: %d\n", result);
     }
 
     // Cleanup
