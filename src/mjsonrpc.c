@@ -50,9 +50,15 @@ cJSON *mjrpc_response_error(int code, char *message, cJSON *id)
         return NULL;
 
     cJSON *result_root = cJSON_CreateObject();
-    cJSON *error_root = cJSON_CreateObject();
-    if (result_root == NULL || error_root == NULL)
+    if (result_root == NULL)
         return NULL;
+
+    cJSON *error_root = cJSON_CreateObject();
+    if (error_root == NULL)
+    {
+        cJSON_Delete(result_root);
+        return NULL;
+    }
 
     cJSON_AddNumberToObject(error_root, "code", code);
     if (message)
@@ -87,7 +93,7 @@ static cJSON *invoke_callback(mjrpc_handle_t *handle,
         }
 
     if (!procedure_found)
-        return mjrpc_response_error(JSON_RPC_2_0_METHOD_NOT_FOUND,
+        return mjrpc_response_error(JSON_RPC_CODE_METHOD_NOT_FOUND,
                                     strdup("Method not found."), id);
     else if (ctx.error_code)
         // Error in callback, custom error code and message
@@ -111,12 +117,14 @@ static cJSON *rpc_handle_obj_req(mjrpc_handle_t *handle, cJSON *request)
         if (id->type == cJSON_NULL)
             id_copy = cJSON_CreateNull();
         else
-            id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) : cJSON_CreateNumber(id->valueint);
+            id_copy = (id->type == cJSON_String) ?
+                    cJSON_CreateString(id->valuestring) : cJSON_CreateNumber(id->valueint);
 
         version = cJSON_GetObjectItem(request, "jsonrpc");
         if (version == NULL || version->type != cJSON_String || strcmp("2.0", version->valuestring) != 0)
-            return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
-                                        strdup("Valid request received: JSONRPC version error."), id_copy);
+            return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                        strdup("Valid request received: JSONRPC version error."),
+                                        id_copy);
 
         method = cJSON_GetObjectItem(request, "method");
         if (method != NULL && method->type == cJSON_String)
@@ -125,21 +133,23 @@ static cJSON *rpc_handle_obj_req(mjrpc_handle_t *handle, cJSON *request)
 
             return invoke_callback(handle, method->valuestring, params, id_copy);
         }
-        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
                                     strdup("Valid request received: No 'method' member."), id_copy);
     }
     else
         // Invalid id type
-        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
-                                    strdup("Valid request received: 'id' member type error."), cJSON_CreateNull());;
+        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                    strdup("Valid request received: 'id' member type error."),
+                                    cJSON_CreateNull());;
 }
 
 static cJSON *rpc_handle_ary_req(mjrpc_handle_t *handle, cJSON *request)
 {
     int array_size = cJSON_GetArraySize(request);
     if (array_size <= 0)
-        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
-                                    strdup("Valid request received: Empty JSON array."), cJSON_CreateNull());
+        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                    strdup("Valid request received: Empty JSON array."),
+                                    cJSON_CreateNull());
 
     int valid_reqs = 0;
     cJSON *return_json_array = cJSON_CreateArray();
@@ -175,7 +185,7 @@ int mjrpc_add_method(mjrpc_handle_t *handle,
     }
     else
     {
-        struct mjrpc_cb *ptr = realloc(handle->cb_array, sizeof(struct mjrpc_cb) * handle->cb_count);
+        struct mjrpc_cb *ptr = realloc(handle->cb_array, sizeof(struct mjrpc_cb) *handle->cb_count);
         if (!ptr)
             return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
         handle->cb_array = ptr;
@@ -225,7 +235,7 @@ int mjrpc_del_method(mjrpc_handle_t *handle, char *name)
             handle->cb_count--;
             if (handle->cb_count)
             {
-                struct mjrpc_cb *ptr = realloc(handle->cb_array, sizeof(struct mjrpc_cb) * handle->cb_count);
+                struct mjrpc_cb *ptr = realloc(handle->cb_array, sizeof(struct mjrpc_cb) *handle->cb_count);
                 if (!ptr)
                     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
 
@@ -279,7 +289,7 @@ cJSON *mjrpc_process_cjson(mjrpc_handle_t *handle,
         ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
         if (ret_code)
             *ret_code = ret;
-        return mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
+        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
                                     strdup("Valid request received: Empty request."), cJSON_CreateNull());
     }
 
@@ -296,8 +306,9 @@ cJSON *mjrpc_process_cjson(mjrpc_handle_t *handle,
     }
     else
     {
-        cjson_return = mjrpc_response_error(JSON_RPC_2_0_INVALID_REQUEST,
-                                            strdup("Valid request received: Not a JSON object or array."), cJSON_CreateNull());
+        cjson_return = mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                            strdup("Valid request received: Not a JSON object or array."),
+                                            cJSON_CreateNull());
         ret = MJRPC_RET_ERROR_PARSE_FAILED;
     }
     if (ret_code)
