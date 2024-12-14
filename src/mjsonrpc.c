@@ -60,7 +60,7 @@ cJSON *mjrpc_response_error(int code, char *message, cJSON *id)
         return NULL;
     }
 
-    cJSON_AddNumberToObject(error_root, "code", code);
+    cJSON_AddIntToObject(error_root, "code", code);
     if (message)
     {
         cJSON_AddStringToObject(error_root, "message", message);
@@ -111,7 +111,7 @@ static cJSON *rpc_handle_obj_req(mjrpc_handle_t *handle, cJSON *request)
     if (id == NULL)
         // No id, this is a notification
         return NULL;
-    if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Number)
+    if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Int)
     {
         cJSON *id_copy = NULL;
         if (id->type == cJSON_NULL)
@@ -176,6 +176,11 @@ int mjrpc_add_method(mjrpc_handle_t *handle,
                      mjrpc_func function_pointer,
                      char *method_name, void *arg2func)
 {
+    if (handle == NULL)
+        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
+    if (function_pointer == NULL || method_name == NULL)
+        return MJRPC_RET_ERROR_INVALID_PARAM;
+
     int i = handle->cb_count++;
     if (!handle->cb_array)
     {
@@ -214,11 +219,22 @@ static void cb_info_destroy(struct mjrpc_cb *info)
 
 int mjrpc_del_method(mjrpc_handle_t *handle, char *name)
 {
-    int i;
+    if (handle == NULL)
+        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
+
+    if (name == NULL)
+    {
+        for (int i = 0; i < handle->cb_count; i++)
+            cb_info_destroy(&(handle->cb_array[i]));
+        handle->cb_count = 0;
+        free(handle->cb_array);
+        handle->cb_array = NULL;
+    }
+
     int found = 0;
     if (handle->cb_array)
     {
-        for (i = 0; i < handle->cb_count; i++)
+        for (int i = 0; i < handle->cb_count; i++)
         {
             if (found)
             {
