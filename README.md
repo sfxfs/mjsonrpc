@@ -1,4 +1,4 @@
-# mjsonrpc - A Minimal JSON-RPC 2.0 Server Middleware Based on cJSON
+# mjsonrpc - A JSON-RPC 2.0 Message Parser and Generator Based on cJSON
 
 English | [中文](README_CN.md)
 
