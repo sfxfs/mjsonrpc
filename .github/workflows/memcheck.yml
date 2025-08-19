@@ -24,7 +24,7 @@ jobs:
 
       - name: Run tests with valgrind
         run: |
-          cd build
+          cd output
           for t in mjsonrpc-example-*; do
             echo "Running valgrind on $t"
             valgrind --leak-check=full --error-exitcode=1 ./$t || exit 1
