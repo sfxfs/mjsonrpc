@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
 #include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
@@ -32,16 +35,17 @@ int main()
     int result;
     char *json_response = mjrpc_process_str(&handle, json_request, &result);
 
-    if (result != MJRPC_RET_OK)
-    {
-        printf("Error processing request: %d\n", result);
-    }
+    // Assert that the result must be MJRPC_RET_OK
+    assert(result == MJRPC_RET_OK);
 
-    if (json_response)
-    {
-        printf("Response: %s\n", json_response);
-        free(json_response);
-    }
+    // Assert that the response is not NULL
+    assert(json_response != NULL);
+
+    // Assert that the response contains "Hello, World!" and "Goodbye, World!"
+    printf("Response: %s\n", json_response);
+    assert(strstr(json_response, "Hello, World!") != NULL);
+    assert(strstr(json_response, "Goodbye, World!") != NULL);
+    free(json_response);
 
     // Cleanup
     mjrpc_del_method(&handle, "hello");

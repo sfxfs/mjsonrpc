@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+
 #include "mjsonrpc.h"
 
 // Define a JSON-RPC method with custom error handling
@@ -40,33 +42,27 @@ int main()
     int result;
 
     // Process the request
+    
     char *json_response = mjrpc_process_str(&handle, json_request, &result);
-
-    if (result != MJRPC_RET_OK)
-    {
-        printf("Error processing request: %d\n", result);
-    }
-
-    if (json_response)
-    {
-        printf("Response: %s\n", json_response);
-        free(json_response);
-    }
+    // Assert that the result must be MJRPC_RET_OK
+    assert(result == MJRPC_RET_OK);
+    // Assert that the response is not NULL and contains 5 (10/2=5)
+    assert(json_response != NULL);
+    printf("Response: %s\n", json_response);
+    assert(strstr(json_response, "5") != NULL);
+    free(json_response);
 
     // Construct a JSON-RPC request with invalid parameters (division by zero)
+
     json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"divide\",\"params\":[10, 0],\"id\":2}";
     json_response = mjrpc_process_str(&handle, json_request, &result);
-
-    if (result != MJRPC_RET_OK)
-    {
-        printf("Error processing request: %d\n", result);
-    }
-
-    if (json_response)
-    {
-        printf("Response: %s\n", json_response);
-        free(json_response);
-    }
+    // Assert that the result must be MJRPC_RET_OK (even if there is an error, the jsonrpc protocol should return an error object)
+    assert(result == MJRPC_RET_OK);
+    // Assert that the response contains "Division by zero is not allowed."
+    assert(json_response != NULL);
+    printf("Response: %s\n", json_response);
+    assert(strstr(json_response, "Division by zero is not allowed.") != NULL);
+    free(json_response);
 
     // Cleanup
     mjrpc_del_method(&handle, "divide");
