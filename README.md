@@ -100,6 +100,8 @@ int main()
 
 ### References
 
-[JSON-RPC Official Docs](https://www.jsonrpc.org/specification)
+[DaveGamble/cJSON](https://github.com/DaveGamble/cJSON)
 
-[jsonrpc-c](https://github.com/hmng/jsonrpc-c)
+[JSON-RPC Specification](https://www.jsonrpc.org/specification)
+
+[hmng/jsonrpc-c](https://github.com/hmng/jsonrpc-c)
