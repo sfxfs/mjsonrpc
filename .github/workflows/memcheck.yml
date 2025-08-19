@@ -1,0 +1,31 @@
+name: Memory Leak Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  valgrind-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake gcc valgrind
+
+      - name: Configure CMake
+        run: cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests with valgrind
+        run: |
+          cd build
+          for t in mjsonrpc-example-*; do
+            echo "Running valgrind on $t"
+            valgrind --leak-check=full --error-exitcode=1 ./$t || exit 1
+          done
