@@ -6,9 +6,9 @@
 #include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
-cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
+cJSON* hello_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
-    cJSON *result = cJSON_CreateString("Hello, World!");
+    cJSON* result = cJSON_CreateString("Hello, World!");
     return result;
 }
 
@@ -21,8 +21,8 @@ int main()
     mjrpc_add_method(&handle, hello_world, "hello", NULL);
 
     // Construct a JSON-RPC request
-    const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1}";
-    char *json_response = NULL;
+    const char* json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1}";
+    char* json_response = NULL;
 
     // Process the request
     int result;

@@ -1,3 +1,24 @@
+# -------- clang-format 自动格式化 --------
+find_program(CLANG_FORMAT_EXE NAMES clang-format)
+if(CLANG_FORMAT_EXE)
+	file(GLOB_RECURSE ALL_SOURCE_FILES
+		"${CMAKE_SOURCE_DIR}/src/*.c"
+		"${CMAKE_SOURCE_DIR}/src/*.h"
+		"${CMAKE_SOURCE_DIR}/example/**/*.c"
+		"${CMAKE_SOURCE_DIR}/example/**/*.h"
+	)
+	# 排除 cJSON
+	list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "/cJSON\\.c$")
+	list(FILTER ALL_SOURCE_FILES EXCLUDE REGEX "/cJSON\\.h$")
+	add_custom_target(format
+		COMMAND ${CLANG_FORMAT_EXE} -style=file -i ${ALL_SOURCE_FILES}
+		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+		COMMENT "Running clang-format on all source files"
+	)
+	# 每次构建前自动格式化
+	add_custom_target(autoformat ALL DEPENDS format)
+endif()
+
 cmake_minimum_required(VERSION 3.10)
 
 project(mjsonrpc)

@@ -6,16 +6,16 @@
 #include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
-cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
+cJSON* hello_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
-    cJSON *result = cJSON_CreateString("Hello, World!");
+    cJSON* result = cJSON_CreateString("Hello, World!");
     return result;
 }
 
 // Define another simple JSON-RPC method
-cJSON *goodbye_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
+cJSON* goodbye_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
-    cJSON *result = cJSON_CreateString("Goodbye, World!");
+    cJSON* result = cJSON_CreateString("Goodbye, World!");
     return result;
 }
 
@@ -29,11 +29,12 @@ int main()
     mjrpc_add_method(&handle, goodbye_world, "goodbye", NULL);
 
     // Construct a batch JSON-RPC request
-    const char *json_request = "[{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":2}]";
+    const char* json_request = "[{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},{\"jsonrpc\":"
+                               "\"2.0\",\"method\":\"goodbye\",\"id\":2}]";
 
     // Process the request
     int result;
-    char *json_response = mjrpc_process_str(&handle, json_request, &result);
+    char* json_response = mjrpc_process_str(&handle, json_request, &result);
 
     // Assert that the result must be MJRPC_RET_OK
     assert(result == MJRPC_RET_OK);
