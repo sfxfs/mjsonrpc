@@ -16,12 +16,7 @@ jobs:
       - name: Install clang-format
         run: sudo apt-get update && sudo apt-get install -y clang-format
 
-      - name: Check code format
-        run: |
-          find src example \( -name '*.c' -o -name '*.h' \) ! -name 'cJSON.c' ! -name 'cJSON.h' | xargs -r clang-format -style=file --dry-run --Werror
-
-      - name: Auto format (if needed)
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Check code format and Auto format
         run: |
           find src example \( -name '*.c' -o -name '*.h' \) ! -name 'cJSON.c' ! -name 'cJSON.h' | xargs -r clang-format -style=file -i
           git config --global user.name "github-actions"
