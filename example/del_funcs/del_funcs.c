@@ -6,16 +6,16 @@
 #include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
-cJSON *hello_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
+cJSON* hello_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
-    cJSON *result = cJSON_CreateString("Hello, World!");
+    cJSON* result = cJSON_CreateString("Hello, World!");
     return result;
 }
 
 // Define another simple JSON-RPC method
-cJSON *goodbye_world(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
+cJSON* goodbye_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
-    cJSON *result = cJSON_CreateString("Goodbye, World!");
+    cJSON* result = cJSON_CreateString("Goodbye, World!");
     return result;
 }
 
@@ -29,12 +29,12 @@ int main()
     mjrpc_add_method(&handle, goodbye_world, "goodbye", NULL);
 
     // Construct a JSON-RPC request
-    const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
+    const char* json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
     int result;
 
     // Process the request
 
-    char *json_response = mjrpc_process_str(&handle, json_request, &result);
+    char* json_response = mjrpc_process_str(&handle, json_request, &result);
     // Assert that the result must be MJRPC_RET_OK
     assert(result == MJRPC_RET_OK);
     // Assert that the response contains "Goodbye, World!"
@@ -50,7 +50,8 @@ int main()
     json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
 
     json_response = mjrpc_process_str(&handle, json_request, &result);
-    // After deleting the method, calling it again should return an error (but result should still be MJRPC_RET_OK, and the error is in json_response)
+    // After deleting the method, calling it again should return an error (but result should still
+    // be MJRPC_RET_OK, and the error is in json_response)
     assert(result == MJRPC_RET_OK);
     assert(json_response != NULL);
     printf("Response: %s\n", json_response);

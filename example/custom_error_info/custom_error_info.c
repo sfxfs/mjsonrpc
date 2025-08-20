@@ -6,7 +6,7 @@
 #include "mjsonrpc.h"
 
 // Define a JSON-RPC method with custom error handling
-cJSON *divide(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
+cJSON* divide(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
     if (params == NULL || cJSON_GetArraySize(params) != 2)
     {
@@ -25,7 +25,7 @@ cJSON *divide(mjrpc_ctx_t *context, cJSON *params, cJSON *id)
         return NULL;
     }
 
-    cJSON *result = cJSON_CreateNumber(a / b);
+    cJSON* result = cJSON_CreateNumber(a / b);
     return result;
 }
 
@@ -38,12 +38,13 @@ int main()
     mjrpc_add_method(&handle, divide, "divide", NULL);
 
     // Construct a JSON-RPC request with valid parameters
-    const char *json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"divide\",\"params\":[10, 2],\"id\":1}";
+    const char* json_request =
+        "{\"jsonrpc\":\"2.0\",\"method\":\"divide\",\"params\":[10, 2],\"id\":1}";
     int result;
 
     // Process the request
-    
-    char *json_response = mjrpc_process_str(&handle, json_request, &result);
+
+    char* json_response = mjrpc_process_str(&handle, json_request, &result);
     // Assert that the result must be MJRPC_RET_OK
     assert(result == MJRPC_RET_OK);
     // Assert that the response is not NULL and contains 5 (10/2=5)
@@ -56,7 +57,8 @@ int main()
 
     json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"divide\",\"params\":[10, 0],\"id\":2}";
     json_response = mjrpc_process_str(&handle, json_request, &result);
-    // Assert that the result must be MJRPC_RET_OK (even if there is an error, the jsonrpc protocol should return an error object)
+    // Assert that the result must be MJRPC_RET_OK (even if there is an error, the jsonrpc protocol
+    // should return an error object)
     assert(result == MJRPC_RET_OK);
     // Assert that the response contains "Division by zero is not allowed."
     assert(json_response != NULL);
