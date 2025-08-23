@@ -7,4 +7,5 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/output)
 
 add_subdirectory(src)
 add_subdirectory(3rd)
+add_subdirectory(test)
 add_subdirectory(example)
