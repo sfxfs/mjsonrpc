@@ -110,26 +110,27 @@ static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
     cJSON *version, *method, *params, *id;
 
     id = cJSON_GetObjectItem(request, "id");
-    if (id == NULL)
-        // No id, this is a notification
-        return NULL;
+
 #ifdef cJSON_Int
-    if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Int)
+    if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Int)
 #else
-    if (id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Number)
+    if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String ||
+        id->type == cJSON_Number)
 #endif
     {
         cJSON* id_copy = NULL;
-        if (id->type == cJSON_NULL)
-            id_copy = cJSON_CreateNull();
-        else
-            id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) :
+        if (id)
+        {
+            if (id->type == cJSON_NULL)
+                id_copy = cJSON_CreateNull();
+            else
+                id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) :
 #ifdef cJSON_Int
-                                                 cJSON_CreateInt(id->valueint);
+                                                     cJSON_CreateInt(id->valueint);
 #else
-                                                 cJSON_CreateNumber(id->valueint);
+                                                     cJSON_CreateNumber(id->valueint);
 #endif
-
+        }
         version = cJSON_GetObjectItem(request, "jsonrpc");
         if (version == NULL || version->type != cJSON_String ||
             strcmp("2.0", version->valuestring) != 0)
@@ -152,7 +153,6 @@ static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
         return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
                                     strdup("Valid request received: 'id' member type error."),
                                     cJSON_CreateNull());
-    ;
 }
 
 static cJSON* rpc_handle_ary_req(mjrpc_handle_t* handle, cJSON* request)
@@ -323,12 +323,18 @@ cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, cJSON* request_cjson, int* re
     if (request_cjson->type == cJSON_Array)
     {
         cjson_return = rpc_handle_ary_req(handle, request_cjson);
-        ret = MJRPC_RET_OK;
+        if (cjson_return)
+            ret = MJRPC_RET_OK;
+        else
+            ret = MJRPC_RET_OK_NOTIFICATION;
     }
     else if (request_cjson->type == cJSON_Object)
     {
         cjson_return = rpc_handle_obj_req(handle, request_cjson);
-        ret = MJRPC_RET_OK;
+        if (cjson_return)
+            ret = MJRPC_RET_OK;
+        else
+            ret = MJRPC_RET_OK_NOTIFICATION;
     }
     else
     {

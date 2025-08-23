@@ -5,10 +5,13 @@
 
 #include "mjsonrpc.h"
 
+static int count = 0;
+
 // Define a simple JSON-RPC method
 cJSON* hello_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
     cJSON* result = cJSON_CreateString("Hello, World!");
+    count++;
     return result;
 }
 
@@ -28,9 +31,12 @@ int main()
     mjrpc_add_method(&handle, hello_world, "hello", NULL);
     mjrpc_add_method(&handle, goodbye_world, "goodbye", NULL);
 
-    // Construct a batch JSON-RPC request
-    const char* json_request = "[{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},{\"jsonrpc\":"
-                               "\"2.0\",\"method\":\"goodbye\",\"id\":2}]";
+    // Construct a batch JSON-RPC request，include a notification (No "id" memeber)
+    const char* json_request = "["
+                               "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},"
+                               "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":2},"
+                               "{\"jsonrpc\":\"2.0\",\"method\":\"hello\"}"
+                               "]";
 
     // Process the request
     int result;
@@ -46,6 +52,7 @@ int main()
     printf("Response: %s\n", json_response);
     assert(strstr(json_response, "Hello, World!") != NULL);
     assert(strstr(json_response, "Goodbye, World!") != NULL);
+    assert(count == 2); // hello_world should be called twice
     free(json_response);
 
     // Cleanup
