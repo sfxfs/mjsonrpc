@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
+
 #include "mjsonrpc.h"
 
 static bool func_ok = false;

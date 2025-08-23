@@ -2,7 +2,7 @@
 project (mjsonrpc)
 
 # Add a library with the above sources
-add_library(${PROJECT_NAME} mjsonrpc.c)
+add_library(${PROJECT_NAME} SHARED mjsonrpc.c)
 
 target_include_directories( ${PROJECT_NAME}
     PUBLIC ${PROJECT_SOURCE_DIR}

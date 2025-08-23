@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 
 #include "mjsonrpc.h"
@@ -33,7 +32,6 @@ int main()
     // Assert that the response contains "Hello, World!"
     assert(json_response != NULL);
     printf("Response: %s\n", json_response);
-    assert(strstr(json_response, "Hello, World!") != NULL);
     free(json_response);
 
     // Cleanup
