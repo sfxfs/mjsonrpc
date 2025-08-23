@@ -32,7 +32,13 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
     if (id == NULL)
     {
         if (result)
-            free(result);
+            cJSON_Delete(result);
+        return NULL;
+    }
+
+    if (result == NULL)
+    {
+        cJSON_Delete(id);
         return NULL;
     }
 
