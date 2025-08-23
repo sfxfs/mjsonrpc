@@ -44,6 +44,7 @@ enum mjrpc_error_return
     MJRPC_RET_ERROR_MEM_ALLOC_FAILED,
     MJRPC_RET_ERROR_NOT_FOUND,
     MJRPC_RET_ERROR_EMPTY_REQUEST,
+    MJRPC_RET_ERROR_NOT_OBJ_ARY,
     MJRPC_RET_ERROR_PARSE_FAILED,
     MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED,
     MJRPC_RET_ERROR_INVALID_PARAM,
@@ -134,4 +135,4 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* re
  */
 cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, cJSON* request_cjson, int* ret_code);
 
-#endif
+#endif // _MJSONRPC_H_

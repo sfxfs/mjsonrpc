@@ -149,7 +149,7 @@ static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
         if (version == NULL || version->type != cJSON_String ||
             strcmp("2.0", version->valuestring) != 0)
             return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                        strdup("Valid request received: JSONRPC version error."),
+                                        strdup("Invalid request received: JSONRPC version error."),
                                         id_copy);
 
         method = cJSON_GetObjectItem(request, "method");
@@ -160,23 +160,18 @@ static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
             return invoke_callback(handle, method->valuestring, params, id_copy);
         }
         return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Valid request received: No 'method' member."), id_copy);
+                                    strdup("Invalid request received: No 'method' member."),
+                                    id_copy);
     }
     else
         // Invalid id type
         return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Valid request received: 'id' member type error."),
+                                    strdup("Invalid request received: 'id' member type error."),
                                     cJSON_CreateNull());
 }
 
-static cJSON* rpc_handle_ary_req(mjrpc_handle_t* handle, cJSON* request)
+static cJSON* rpc_handle_ary_req(mjrpc_handle_t* handle, cJSON* request, int array_size)
 {
-    int array_size = cJSON_GetArraySize(request);
-    if (array_size <= 0)
-        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Valid request received: Empty JSON array."),
-                                    cJSON_CreateNull());
-
     int valid_reqs = 0;
     cJSON* return_json_array = cJSON_CreateArray();
     for (int i = 0; i < array_size; i++)
@@ -324,38 +319,59 @@ cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, cJSON* request_cjson, int* re
 
     if (request_cjson == NULL)
     {
-        // Empty object or array or empty request
-        ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
+        ret = MJRPC_RET_ERROR_PARSE_FAILED;
         if (ret_code)
             *ret_code = ret;
-        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Valid request received: Empty request."),
-                                    cJSON_CreateNull());
+        return mjrpc_response_error(
+            JSON_RPC_CODE_INVALID_REQUEST,
+            strdup("Invalid request received: Not a JSON formatted request."), cJSON_CreateNull());
     }
 
     cJSON* cjson_return = NULL;
     if (request_cjson->type == cJSON_Array)
     {
-        cjson_return = rpc_handle_ary_req(handle, request_cjson);
-        if (cjson_return)
-            ret = MJRPC_RET_OK;
+        int array_size = cJSON_GetArraySize(request_cjson);
+        if (array_size <= 0)
+        {
+            ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
+            cjson_return = mjrpc_response_error(
+                JSON_RPC_CODE_INVALID_REQUEST,
+                strdup("Invalid request received: Empty JSON array."), cJSON_CreateNull());
+        }
         else
-            ret = MJRPC_RET_OK_NOTIFICATION;
+        {
+            cjson_return = rpc_handle_ary_req(handle, request_cjson, array_size);
+            if (cjson_return)
+                ret = MJRPC_RET_OK;
+            else
+                ret = MJRPC_RET_OK_NOTIFICATION;
+        }
     }
     else if (request_cjson->type == cJSON_Object)
     {
-        cjson_return = rpc_handle_obj_req(handle, request_cjson);
-        if (cjson_return)
-            ret = MJRPC_RET_OK;
+        int obj_size = cJSON_GetArraySize(request_cjson);
+        if (obj_size <= 0)
+        {
+            ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
+            cjson_return = mjrpc_response_error(
+                JSON_RPC_CODE_INVALID_REQUEST,
+                strdup("Invalid request received: Empty JSON object."), cJSON_CreateNull());
+        }
         else
-            ret = MJRPC_RET_OK_NOTIFICATION;
+        {
+            cjson_return = rpc_handle_obj_req(handle, request_cjson);
+            if (cjson_return)
+                ret = MJRPC_RET_OK;
+            else
+                ret = MJRPC_RET_OK_NOTIFICATION;
+        }
     }
     else
     {
         cjson_return = mjrpc_response_error(
             JSON_RPC_CODE_INVALID_REQUEST,
-            strdup("Valid request received: Not a JSON object or array."), cJSON_CreateNull());
-        ret = MJRPC_RET_ERROR_PARSE_FAILED;
+            strdup("Invalid request received: Not a JSON object or array."), cJSON_CreateNull());
+        ret = MJRPC_RET_ERROR_NOT_OBJ_ARY;
     }
     if (ret_code)
         *ret_code = ret;
