@@ -4,7 +4,7 @@ English | [中文](README_CN.md)
 
 ### Introduction
 
-This middleware is suitable for Linux systems and can be integrated with various communication methods (TCP, UDP, serial). It is easy to use (with only a few functional functions) and supports batch calls (JSON Array) as well as custom error messages and notification handling.
+This library is suitable for embedded systems and can be integrated into various communication methods (TCP, UDP, serial port). It is simple to use (only a few functions) and supports batch calls (JSON Array), automatic generation of corresponding error messages according to requests or generating customized error messages, as well as notification requests.
 
 ### Functions
 
