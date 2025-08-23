@@ -31,6 +31,7 @@ add_subdirectory(example/del_funcs)
 add_subdirectory(example/invoke_a_func)
 add_subdirectory(example/rpc_with_params)
 add_subdirectory(example/notif_req)
+add_subdirectory(example/error_cases)
 
 # 添加CTest支持
 enable_testing()
@@ -42,3 +43,4 @@ add_test(NAME del_funcs COMMAND mjsonrpc-example-del-funcs)
 add_test(NAME invoke_a_func COMMAND mjsonrpc-example-invoke-a-func)
 add_test(NAME rpc_with_params COMMAND mjsonrpc-example-rpc-with-params)
 add_test(NAME notify_example COMMAND mjsonrpc-example-notif-req)
+add_test(NAME error_cases COMMAND mjsonrpc-example-error-cases)
