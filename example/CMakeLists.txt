@@ -1,0 +1,7 @@
+add_subdirectory(batch_invoke)
+add_subdirectory(custom_error_info)
+add_subdirectory(del_funcs)
+add_subdirectory(error_cases)
+add_subdirectory(invoke_a_func)
+add_subdirectory(notif_req)
+add_subdirectory(rpc_with_params)
