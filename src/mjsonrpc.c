@@ -29,8 +29,12 @@
 
 cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
 {
-    if (id == NULL || result == NULL)
+    if (id == NULL)
+    {
+        if (result)
+            free(result);
         return NULL;
+    }
 
     cJSON* result_root = cJSON_CreateObject();
     if (result_root == NULL)
@@ -46,7 +50,11 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
 cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
 {
     if (id == NULL)
+    {
+        if (message)
+            free(message);
         return NULL;
+    }
 
     cJSON* result_root = cJSON_CreateObject();
     if (result_root == NULL)
