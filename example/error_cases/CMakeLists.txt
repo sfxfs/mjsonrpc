@@ -1,5 +1,5 @@
 project(mjsonrpc-example-error-cases)
-add_executable(${PROJECT_NAME} error_cases.c ../../src/mjsonrpc.c ../../src/cJSON.c)
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-                            ../../src)
+add_executable(${PROJECT_NAME} error_cases.c)
+
+target_link_libraries(${PROJECT_NAME} mjsonrpc cJSON)
