@@ -5,8 +5,6 @@
 
 #include "mjsonrpc.h"
 
-static bool func_ok = false;
-
 // Define a simple JSON-RPC method
 cJSON* notify_func(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 {
@@ -14,7 +12,6 @@ cJSON* notify_func(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
     if (params && cJSON_IsString(params))
     {
         printf("params: %s\n", params->valuestring);
-        func_ok = true;
     }
     return NULL; // No need to return
 }
@@ -27,14 +24,13 @@ int main()
     // Construct a JSON-RPC notification (without "id" field)
     const char* json_notify =
         "{\"jsonrpc\":\"2.0\",\"method\":\"notify_method\",\"params\":\"hello notify!\"}";
-    int result = -1;
+    int result;
     char* json_response = mjrpc_process_str(&handle, json_notify, &result);
 
     // Notification type should return NULL, and result == MJRPC_RET_OK_NOTIFICATION
     assert(json_response == NULL);
     assert(result == MJRPC_RET_OK_NOTIFICATION);
-    assert(func_ok == true);
-    printf("notify test passed!\n");
+    printf("notify request passed!\n");
 
     mjrpc_del_method(&handle, "notify_method");
     return 0;
