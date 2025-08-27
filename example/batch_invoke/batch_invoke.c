@@ -27,7 +27,7 @@ int main()
     mjrpc_add_method(&handle, hello_world, "hello", NULL);
     mjrpc_add_method(&handle, goodbye_world, "goodbye", NULL);
 
-    // Construct a batch JSON-RPC request，include a notification (No "id" memeber)
+    // Construct a batch JSON-RPC request，include a notification (No "id" member)
     const char* json_request = "["
                                "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},"
                                "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":2}"

@@ -91,7 +91,8 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
     return result_root;
 }
 
-static cJSON* invoke_callback(mjrpc_handle_t* handle, char* method_name, cJSON* params, cJSON* id)
+static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_name, cJSON* params,
+                              cJSON* id)
 {
     cJSON* returned = NULL;
     int procedure_found = 0;
@@ -119,11 +120,9 @@ static cJSON* invoke_callback(mjrpc_handle_t* handle, char* method_name, cJSON* 
         return mjrpc_response_ok(returned, id);
 }
 
-static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
+static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* request)
 {
-    cJSON *version, *method, *params, *id;
-
-    id = cJSON_GetObjectItem(request, "id");
+    cJSON* id = cJSON_GetObjectItem(request, "id");
 
 #ifdef cJSON_Int
     if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Int)
@@ -145,17 +144,17 @@ static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
                                                      cJSON_CreateNumber(id->valueint);
 #endif
         }
-        version = cJSON_GetObjectItem(request, "jsonrpc");
+        const cJSON* version = cJSON_GetObjectItem(request, "jsonrpc");
         if (version == NULL || version->type != cJSON_String ||
             strcmp("2.0", version->valuestring) != 0)
             return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
                                         strdup("Invalid request received: JSONRPC version error."),
                                         id_copy);
 
-        method = cJSON_GetObjectItem(request, "method");
+        const cJSON* method = cJSON_GetObjectItem(request, "method");
         if (method != NULL && method->type == cJSON_String)
         {
-            params = cJSON_GetObjectItem(request, "params");
+            cJSON* params = cJSON_GetObjectItem(request, "params");
 
             return invoke_callback(handle, method->valuestring, params, id_copy);
         }
@@ -170,7 +169,8 @@ static cJSON* rpc_handle_obj_req(mjrpc_handle_t* handle, cJSON* request)
                                     cJSON_CreateNull());
 }
 
-static cJSON* rpc_handle_ary_req(mjrpc_handle_t* handle, cJSON* request, int array_size)
+static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* request,
+                                 const int array_size)
 {
     int valid_reqs = 0;
     cJSON* return_json_array = cJSON_CreateArray();
@@ -193,7 +193,7 @@ static cJSON* rpc_handle_ary_req(mjrpc_handle_t* handle, cJSON* request, int arr
 // ----------------------------------------------------------------------------
 // main functions
 
-int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, char* method_name,
+int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
                      void* arg2func)
 {
     if (handle == NULL)
@@ -238,7 +238,7 @@ static void cb_info_destroy(struct mjrpc_cb* info)
     }
 }
 
-int mjrpc_del_method(mjrpc_handle_t* handle, char* name)
+int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
 {
     if (handle == NULL)
         return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
@@ -252,9 +252,9 @@ int mjrpc_del_method(mjrpc_handle_t* handle, char* name)
         handle->cb_array = NULL;
     }
 
-    int found = 0;
     if (handle->cb_array)
     {
+        int found = 0;
         for (int i = 0; i < handle->cb_count; i++)
         {
             if (found)
@@ -306,7 +306,7 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* re
     return NULL;
 }
 
-cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, cJSON* request_cjson, int* ret_code)
+cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code)
 {
     int ret = MJRPC_RET_OK;
     if (handle == NULL)
