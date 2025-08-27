@@ -22,16 +22,16 @@
     SOFTWARE.
 */
 
-#ifndef _MJSONRPC_H_
-#define _MJSONRPC_H_
+#ifndef MJSONRPC_H_
+#define MJSONRPC_H_
 
 #include "cJSON.h"
 
-#define JSON_RPC_CODE_PARSE_ERROR -32700
-#define JSON_RPC_CODE_INVALID_REQUEST -32600
-#define JSON_RPC_CODE_METHOD_NOT_FOUND -32601
-#define JSON_RPC_CODE_INVALID_PARAMS -32603
-#define JSON_RPC_CODE_INTERNAL_ERROR -32693
+#define JSON_RPC_CODE_PARSE_ERROR       (-32700)
+#define JSON_RPC_CODE_INVALID_REQUEST   (-32600)
+#define JSON_RPC_CODE_METHOD_NOT_FOUND  (-32601)
+#define JSON_RPC_CODE_INVALID_PARAMS    (-32603)
+#define JSON_RPC_CODE_INTERNAL_ERROR    (-32693)
 // -32000 to -32099 Reserved for implementation-defined server-errors.
 
 /**
@@ -106,7 +106,7 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
  * @param arg2func argument to callback function
  * @return mjrpc_error_return
  */
-int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, char* method_name,
+int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
                      void* arg2func);
 
 /**
@@ -115,7 +115,7 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, char* 
  * @param method_name method name if NULL, delete all methods
  * @return mjrpc_error_return
  */
-int mjrpc_del_method(mjrpc_handle_t* handle, char* method_name);
+int mjrpc_del_method(mjrpc_handle_t* handle, const char* method_name);
 
 /**
  * @brief process a string typed jsonrpc request
@@ -133,6 +133,6 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* re
  * @param ret_code return code
  * @return response cjson pointer (need to be free)
  */
-cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, cJSON* request_cjson, int* ret_code);
+cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code);
 
-#endif // _MJSONRPC_H_
+#endif // MJSONRPC_H_

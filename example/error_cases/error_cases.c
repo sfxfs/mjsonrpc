@@ -22,10 +22,9 @@ int main()
     mjrpc_handle_t handle = {0};
     mjrpc_add_method(&handle, echo, "echo", NULL);
     int result;
-    char* response;
 
     // 1. Parse error (invalid JSON)
-    response = mjrpc_process_str(&handle, "{invalid json}", &result);
+    char* response = mjrpc_process_str(&handle, "{invalid json}", &result);
     assert(result != MJRPC_RET_OK);
     printf("Parse error: %s\n", response);
     free(response);

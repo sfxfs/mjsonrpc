@@ -25,7 +25,7 @@ cJSON* divide(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
         return NULL;
     }
 
-    cJSON* result = cJSON_CreateNumber(a / b);
+    cJSON* result = cJSON_CreateNumber((double)a / b);
     return result;
 }
 
