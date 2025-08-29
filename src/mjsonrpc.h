@@ -26,6 +26,7 @@
 #define MJSONRPC_H_
 
 #include "cJSON.h"
+#include <stdint.h>
 
 #define JSON_RPC_CODE_PARSE_ERROR (-32700)
 #define JSON_RPC_CODE_INVALID_REQUEST (-32600)
@@ -56,7 +57,7 @@ enum mjrpc_error_return
 typedef struct
 {
     void* data;
-    int error_code;
+    int32_t error_code;
     char* error_message;
 } mjrpc_ctx_t;
 
@@ -67,7 +68,7 @@ typedef cJSON* (*mjrpc_func)(mjrpc_ctx_t* context, cJSON* params, cJSON* id);
  */
 struct mjrpc_cb
 {
-    char* name;
+    uint32_t hash;
     mjrpc_func function;
     void* arg;
 };
@@ -77,7 +78,7 @@ struct mjrpc_cb
  */
 typedef struct mjrpc_handle
 {
-    int cb_count;
+    uint16_t cb_count;
     struct mjrpc_cb* cb_array;
 } mjrpc_handle_t;
 
