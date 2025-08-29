@@ -27,6 +27,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+// FNV-1a 32-bit hash function
+static uint32_t hash_fnv1a_32(const char* str)
+{
+    uint32_t hash = 2166136261u;
+    int c;
+
+    while ((c = (int) *str++))
+    {
+        hash ^= (uint32_t) c;
+        hash *= 16777619u;
+    }
+
+    return hash;
+}
+
 cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
 {
     if (id == NULL)
@@ -100,8 +115,9 @@ static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_n
     ctx.error_code = 0;
     ctx.error_message = NULL;
     int i = handle->cb_count;
+    const uint32_t hash = hash_fnv1a_32(method_name);
     while (i--)
-        if (!strcmp(handle->cb_array[i].name, method_name))
+        if (handle->cb_array[i].hash == hash)
         {
             procedure_found = 1;
             ctx.data = handle->cb_array[i].arg;
@@ -201,7 +217,7 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
     if (function_pointer == NULL || method_name == NULL)
         return MJRPC_RET_ERROR_INVALID_PARAM;
 
-    int i = handle->cb_count++;
+    const int i = handle->cb_count++;
     if (!handle->cb_array)
     {
         handle->cb_array = malloc(sizeof(struct mjrpc_cb));
@@ -216,8 +232,7 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
             return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
         handle->cb_array = ptr;
     }
-    if ((handle->cb_array[i].name = strdup(method_name)) == NULL)
-        return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+    handle->cb_array[i].hash = hash_fnv1a_32(method_name);
     handle->cb_array[i].function = function_pointer;
     handle->cb_array[i].arg = arg2func;
 
@@ -226,11 +241,6 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
 
 static void cb_info_destroy(struct mjrpc_cb* info)
 {
-    if (info->name)
-    {
-        free(info->name);
-        info->name = NULL;
-    }
     if (info->arg)
     {
         free(info->arg);
@@ -254,6 +264,7 @@ int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
 
     if (handle->cb_array)
     {
+        const uint32_t hash = hash_fnv1a_32(name);
         int found = 0;
         for (int i = 0; i < handle->cb_count; i++)
         {
@@ -261,7 +272,7 @@ int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
             {
                 handle->cb_array[i - 1] = handle->cb_array[i];
             }
-            else if (!strcmp(name, handle->cb_array[i].name))
+            else if (hash == handle->cb_array[i].hash)
             {
                 found = 1;
                 cb_info_destroy(&(handle->cb_array[i]));
