@@ -7,7 +7,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-static cJSON* add_func(mjrpc_ctx_t* ctx, cJSON* params, cJSON* id) {
+static cJSON* add_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id) {
     int a = 0, b = 0;
     if (params && cJSON_IsArray(params) && cJSON_GetArraySize(params) == 2) {
         cJSON* a_item = cJSON_GetArrayItem(params, 0);
@@ -21,30 +21,30 @@ static cJSON* add_func(mjrpc_ctx_t* ctx, cJSON* params, cJSON* id) {
 }
 
 void test_mjrpc_add_and_call(void) {
-    mjrpc_handle_t handle = {0};
-    int ret = mjrpc_add_method(&handle, add_func, "add", NULL);
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
+    const int ret = mjrpc_add_method(handle, add_func, "add", NULL);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
 
     const char* req = "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[3,5],\"id\":1}";
     int code = -1;
-    char* resp = mjrpc_process_str(&handle, req, &code);
+    char* resp = mjrpc_process_str(handle, req, &code);
     TEST_ASSERT_NOT_NULL(resp);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, code);
 
     cJSON* resp_json = cJSON_Parse(resp);
     TEST_ASSERT_NOT_NULL(resp_json);
-    cJSON* result = cJSON_GetObjectItem(resp_json, "result");
+    const cJSON* result = cJSON_GetObjectItem(resp_json, "result");
     TEST_ASSERT_NOT_NULL(result);
     TEST_ASSERT_TRUE(cJSON_IsNumber(result));
     TEST_ASSERT_EQUAL_INT(8, result->valueint);
 
     cJSON_Delete(resp_json);
     free(resp);
-    mjrpc_del_method(&handle, NULL);
+    mjrpc_destroy_handle(handle);
 }
 
 
-static cJSON* mul_func(mjrpc_ctx_t* ctx, cJSON* params, cJSON* id) {
+static cJSON* mul_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id) {
     int a = 1, b = 1;
     if (params && cJSON_IsArray(params) && cJSON_GetArraySize(params) == 2) {
         cJSON* a_item = cJSON_GetArrayItem(params, 0);
@@ -58,10 +58,10 @@ static cJSON* mul_func(mjrpc_ctx_t* ctx, cJSON* params, cJSON* id) {
 }
 
 void test_method_not_found(void) {
-    mjrpc_handle_t handle = {0};
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
     const char* req = "{\"jsonrpc\":\"2.0\",\"method\":\"no_such\",\"id\":2}";
     int code = -1;
-    char* resp = mjrpc_process_str(&handle, req, &code);
+    char* resp = mjrpc_process_str(handle, req, &code);
     TEST_ASSERT_NOT_NULL(resp);
     cJSON* resp_json = cJSON_Parse(resp);
     TEST_ASSERT_NOT_NULL(resp_json);
@@ -72,15 +72,16 @@ void test_method_not_found(void) {
     TEST_ASSERT_EQUAL_INT(JSON_RPC_CODE_METHOD_NOT_FOUND, code_item->valueint);
     cJSON_Delete(resp_json);
     free(resp);
+    mjrpc_destroy_handle(handle);
 }
 
 void test_invalid_params(void) {
-    mjrpc_handle_t handle = {0};
-    mjrpc_add_method(&handle, add_func, "add", NULL);
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
+    mjrpc_add_method(handle, add_func, "add", NULL);
     // 参数数量错误
     const char* req = "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[1],\"id\":3}";
     int code = -1;
-    char* resp = mjrpc_process_str(&handle, req, &code);
+    char* resp = mjrpc_process_str(handle, req, &code);
     TEST_ASSERT_NOT_NULL(resp);
     cJSON* resp_json = cJSON_Parse(resp);
     TEST_ASSERT_NOT_NULL(resp_json);
@@ -89,15 +90,15 @@ void test_invalid_params(void) {
     TEST_ASSERT_EQUAL_INT(0, result->valueint);
     cJSON_Delete(resp_json);
     free(resp);
-    mjrpc_del_method(&handle, NULL);
+    mjrpc_destroy_handle(handle);
 }
 
 void test_invalid_request(void) {
-    mjrpc_handle_t handle = {0};
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
     // 缺少 method 字段
     const char* req = "{\"jsonrpc\":\"2.0\",\"id\":4}";
     int code = -1;
-    char* resp = mjrpc_process_str(&handle, req, &code);
+    char* resp = mjrpc_process_str(handle, req, &code);
     TEST_ASSERT_NOT_NULL(resp);
     cJSON* resp_json = cJSON_Parse(resp);
     TEST_ASSERT_NOT_NULL(resp_json);
@@ -108,17 +109,18 @@ void test_invalid_request(void) {
     TEST_ASSERT_EQUAL_INT(JSON_RPC_CODE_INVALID_REQUEST, code_item->valueint);
     cJSON_Delete(resp_json);
     free(resp);
+    mjrpc_destroy_handle(handle);
 }
 
 void test_batch_request(void) {
-    mjrpc_handle_t handle = {0};
-    mjrpc_add_method(&handle, add_func, "add", NULL);
-    mjrpc_add_method(&handle, mul_func, "mul", NULL);
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
+    mjrpc_add_method(handle, add_func, "add", NULL);
+    mjrpc_add_method(handle, mul_func, "mul", NULL);
     const char* req = "[\n"
         "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[2,3],\"id\":1},\n"
         "{\"jsonrpc\":\"2.0\",\"method\":\"mul\",\"params\":[2,3],\"id\":2}\n]";
     int code = -1;
-    char* resp = mjrpc_process_str(&handle, req, &code);
+    char* resp = mjrpc_process_str(handle, req, &code);
     TEST_ASSERT_NOT_NULL(resp);
     cJSON* resp_json = cJSON_Parse(resp);
     TEST_ASSERT_NOT_NULL(resp_json);
@@ -136,17 +138,17 @@ void test_batch_request(void) {
     TEST_ASSERT_EQUAL_INT(6, result2->valueint);
     cJSON_Delete(resp_json);
     free(resp);
-    mjrpc_del_method(&handle, NULL);
+    mjrpc_destroy_handle(handle);
 }
 
 void test_multi_method(void) {
-    mjrpc_handle_t handle = {0};
-    mjrpc_add_method(&handle, add_func, "add", NULL);
-    mjrpc_add_method(&handle, mul_func, "mul", NULL);
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
+    mjrpc_add_method(handle, add_func, "add", NULL);
+    mjrpc_add_method(handle, mul_func, "mul", NULL);
     // 调用 add
     const char* req1 = "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[7,8],\"id\":10}";
     int code = -1;
-    char* resp1 = mjrpc_process_str(&handle, req1, &code);
+    char* resp1 = mjrpc_process_str(handle, req1, &code);
     TEST_ASSERT_NOT_NULL(resp1);
     cJSON* resp_json1 = cJSON_Parse(resp1);
     TEST_ASSERT_NOT_NULL(resp_json1);
@@ -157,7 +159,7 @@ void test_multi_method(void) {
     free(resp1);
     // 调用 mul
     const char* req2 = "{\"jsonrpc\":\"2.0\",\"method\":\"mul\",\"params\":[7,8],\"id\":11}";
-    char* resp2 = mjrpc_process_str(&handle, req2, &code);
+    char* resp2 = mjrpc_process_str(handle, req2, &code);
     TEST_ASSERT_NOT_NULL(resp2);
     cJSON* resp_json2 = cJSON_Parse(resp2);
     TEST_ASSERT_NOT_NULL(resp_json2);
@@ -166,7 +168,7 @@ void test_multi_method(void) {
     TEST_ASSERT_EQUAL_INT(56, result2->valueint);
     cJSON_Delete(resp_json2);
     free(resp2);
-    mjrpc_del_method(&handle, NULL);
+    mjrpc_destroy_handle(handle);
 }
 
 int main(void) {

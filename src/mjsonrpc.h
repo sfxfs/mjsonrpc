@@ -39,9 +39,6 @@ extern "C" {
 #define JSON_RPC_CODE_INTERNAL_ERROR (-32693)
 // -32000 to -32099 Reserved for implementation-defined server-errors.
 
-/**
- * @brief mjrpc error code
- */
 enum mjrpc_error_return
 {
     MJRPC_RET_OK,
@@ -52,38 +49,31 @@ enum mjrpc_error_return
     MJRPC_RET_ERROR_NOT_OBJ_ARY,
     MJRPC_RET_ERROR_PARSE_FAILED,
     MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED,
-    MJRPC_RET_ERROR_INVALID_PARAM,
+    MJRPC_RET_ERROR_INVALID_PARAM
 };
 
-/**
- * @brief jsonrpc callback function context
- */
 typedef struct
 {
     void* data;
     int32_t error_code;
     char* error_message;
-} mjrpc_ctx_t;
+} mjrpc_func_ctx_t;
 
-typedef cJSON* (*mjrpc_func)(mjrpc_ctx_t* context, cJSON* params, cJSON* id);
+typedef cJSON* (*mjrpc_func)(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id);
 
-/**
- * @brief jsonrpc callback function
- */
-struct mjrpc_cb
+struct mjrpc_method
 {
-    uint32_t hash;
-    mjrpc_func function;
+    char* name;
+    mjrpc_func func;
     void* arg;
+    int state;
 };
 
-/**
- * @brief mjrpc handle
- */
 typedef struct mjrpc_handle
 {
-    uint16_t cb_count;
-    struct mjrpc_cb* cb_array;
+    struct mjrpc_method* methods;
+    size_t capacity;
+    size_t size;
 } mjrpc_handle_t;
 
 /**
@@ -104,21 +94,35 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id);
 cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
 
 /**
+ * @brief allocate a mjsonrpc handle
+ * @param initial_capacity initial capacity of builtin hash table
+ * @return pointer of mjrpc handle (destroy the handle after use)
+ */
+mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity);
+
+/**
+ * @brief destroy (free) a handle
+ * @param handle handle to be free
+ * @return enum mjrpc_error_return
+ */
+int mjrpc_destroy_handle(mjrpc_handle_t* handle);
+
+/**
  * @brief add a method to jsonrpc handle
  * @param handle mjrpc handle
  * @param function_pointer callback function
  * @param method_name method name
  * @param arg2func argument to callback function
- * @return mjrpc_error_return
+ * @return enum mjrpc_error_return
  */
-int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer,
-                     const char* method_name, void* arg2func);
+int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
+                     void* arg2func);
 
 /**
  * @brief delete a method from jsonrpc handle
  * @param handle mjrpc handle
  * @param method_name method name if NULL, delete all methods
- * @return mjrpc_error_return
+ * @return enum mjrpc_error_return
  */
 int mjrpc_del_method(mjrpc_handle_t* handle, const char* method_name);
 

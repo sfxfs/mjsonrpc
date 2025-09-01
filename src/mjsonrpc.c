@@ -27,20 +27,165 @@
 #include <stdlib.h>
 #include <string.h>
 
-// FNV-1a 32-bit hash function
-static uint32_t hash_fnv1a_32(const char* str)
-{
-    uint32_t hash = 2166136261u;
-    int c;
+/*--- utility ---*/
 
-    while ((c = (int) *str++))
+enum method_state
+{
+    EMPTY,
+    OCCUPIED,
+    DELETED
+};
+
+static unsigned int hash(const char* key, size_t capacity)
+{
+    unsigned int hash_value = 0;
+    while (*key)
     {
-        hash ^= (uint32_t) c;
-        hash *= 16777619u;
+        hash_value = (hash_value * 31) + (*key++);
+    }
+    return hash_value % capacity;
+}
+
+static int resize(mjrpc_handle_t* handle)
+{
+    const size_t old_capacity = handle->capacity;
+    struct mjrpc_method* old_methods = handle->methods;
+
+    handle->capacity *= 2;
+    handle->size = 0;
+    handle->methods = (struct mjrpc_method*) calloc(handle->capacity, sizeof(struct mjrpc_method));
+    if (handle->methods == NULL)
+    {
+        handle->capacity = old_capacity;
+        handle->methods = old_methods;
+        return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
     }
 
-    return hash;
+    for (size_t i = 0; i < old_capacity; i++)
+    {
+        if (old_methods[i].state == OCCUPIED)
+        {
+            mjrpc_add_method(handle, old_methods[i].func, old_methods[i].name, old_methods[i].arg);
+            free(old_methods[i].name);
+        }
+    }
+    free(old_methods);
+    return MJRPC_RET_OK;
 }
+
+static int method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func* func, void** arg)
+{
+    unsigned int index = hash(key, handle->capacity);
+    size_t probe_count = 0;
+
+    while (handle->methods[index].state != EMPTY)
+    {
+        if (handle->methods[index].state == OCCUPIED &&
+            strcmp(handle->methods[index].name, key) == 0)
+        {
+            *func = handle->methods[index].func;
+            *arg = handle->methods[index].arg;
+            return 1;
+        }
+        probe_count++;
+        index = (index + probe_count * probe_count) % handle->capacity;
+    }
+    return 0;
+}
+
+/*--- private functions ---*/
+
+static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_name, cJSON* params,
+                              cJSON* id)
+{
+    cJSON* returned = NULL;
+    mjrpc_func func = NULL;
+    void* arg = NULL;
+    mjrpc_func_ctx_t ctx = {0};
+    ctx.error_code = 0;
+    ctx.error_message = NULL;
+    if (!method_get((mjrpc_handle_t*) handle, method_name, &func, &arg) || !func)
+    {
+        return mjrpc_response_error(JSON_RPC_CODE_METHOD_NOT_FOUND, strdup("Method not found."),
+                                    id);
+    }
+    ctx.data = arg;
+    returned = func(&ctx, params, id);
+    if (ctx.error_code)
+        return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    return mjrpc_response_ok(returned, id);
+}
+
+static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* request)
+{
+    cJSON* id = cJSON_GetObjectItem(request, "id");
+
+#ifdef cJSON_Int
+    if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Int)
+#else
+    if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String ||
+        id->type == cJSON_Number)
+#endif
+    {
+        cJSON* id_copy = NULL;
+        if (id)
+        {
+            if (id->type == cJSON_NULL)
+                id_copy = cJSON_CreateNull();
+            else
+                id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) :
+#ifdef cJSON_Int
+                                                     cJSON_CreateInt(id->valueint);
+#else
+                                                     cJSON_CreateNumber(id->valueint);
+#endif
+        }
+        const cJSON* version = cJSON_GetObjectItem(request, "jsonrpc");
+        if (version == NULL || version->type != cJSON_String ||
+            strcmp("2.0", version->valuestring) != 0)
+            return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                        strdup("Invalid request received: JSONRPC version error."),
+                                        id_copy);
+
+        const cJSON* method = cJSON_GetObjectItem(request, "method");
+        if (method != NULL && method->type == cJSON_String)
+        {
+            cJSON* params = cJSON_GetObjectItem(request, "params");
+
+            return invoke_callback(handle, method->valuestring, params, id_copy);
+        }
+        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                    strdup("Invalid request received: No 'method' member."),
+                                    id_copy);
+    }
+    // Invalid id type
+    return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                strdup("Invalid request received: 'id' member type error."),
+                                cJSON_CreateNull());
+}
+
+static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* request,
+                                 const int array_size)
+{
+    int valid_reqs = 0;
+    cJSON* return_json_array = cJSON_CreateArray();
+    for (int i = 0; i < array_size; i++)
+    {
+        cJSON* obj_req = rpc_handle_obj_req(handle, cJSON_GetArrayItem(request, i));
+        if (obj_req)
+        {
+            cJSON_AddItemToArray(return_json_array, obj_req);
+            valid_reqs++;
+        }
+    }
+
+    if (valid_reqs != 0)
+        return return_json_array;
+    // all requests are notifications or invalid
+    return NULL;
+}
+
+/*--- main functions ----*/
 
 cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
 {
@@ -104,108 +249,43 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
     return result_root;
 }
 
-static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_name, cJSON* params,
-                              cJSON* id)
+#define DEFAULT_INITIAL_CAPACITY 16
+
+mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity)
 {
-    cJSON* returned = NULL;
-    int procedure_found = 0;
-    mjrpc_ctx_t ctx;
-    ctx.error_code = 0;
-    ctx.error_message = NULL;
-    int i = handle->cb_count;
-    const uint32_t hash = hash_fnv1a_32(method_name);
-    while (i--)
-        if (handle->cb_array[i].hash == hash)
-        {
-            procedure_found = 1;
-            ctx.data = handle->cb_array[i].arg;
-            returned = handle->cb_array[i].function(&ctx, params, id);
-            break;
-        }
-
-    if (!procedure_found)
-        return mjrpc_response_error(JSON_RPC_CODE_METHOD_NOT_FOUND, strdup("Method not found."),
-                                    id);
-    else if (ctx.error_code)
-        // Error in callback, custom error code and message
-        return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
-    else
-        // No error in callback, return the result
-        return mjrpc_response_ok(returned, id);
-}
-
-static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* request)
-{
-    cJSON* id = cJSON_GetObjectItem(request, "id");
-
-#ifdef cJSON_Int
-    if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String || id->type == cJSON_Int)
-#else
-    if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String ||
-        id->type == cJSON_Number)
-#endif
+    if (initial_capacity == 0)
+        initial_capacity = DEFAULT_INITIAL_CAPACITY;
+    mjrpc_handle_t* handle = malloc(sizeof(mjrpc_handle_t));
+    if (handle == NULL)
+        return NULL;
+    handle->capacity = initial_capacity;
+    handle->size = 0;
+    handle->methods = (struct mjrpc_method*) calloc(handle->capacity, sizeof(struct mjrpc_method));
+    if (handle->methods == NULL)
     {
-        cJSON* id_copy = NULL;
-        if (id)
-        {
-            if (id->type == cJSON_NULL)
-                id_copy = cJSON_CreateNull();
-            else
-                id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) :
-#ifdef cJSON_Int
-                                                     cJSON_CreateInt(id->valueint);
-#else
-                                                     cJSON_CreateNumber(id->valueint);
-#endif
-        }
-        const cJSON* version = cJSON_GetObjectItem(request, "jsonrpc");
-        if (version == NULL || version->type != cJSON_String ||
-            strcmp("2.0", version->valuestring) != 0)
-            return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                        strdup("Invalid request received: JSONRPC version error."),
-                                        id_copy);
-
-        const cJSON* method = cJSON_GetObjectItem(request, "method");
-        if (method != NULL && method->type == cJSON_String)
-        {
-            cJSON* params = cJSON_GetObjectItem(request, "params");
-
-            return invoke_callback(handle, method->valuestring, params, id_copy);
-        }
-        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Invalid request received: No 'method' member."),
-                                    id_copy);
+        free(handle);
+        return NULL;
     }
-    else
-        // Invalid id type
-        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Invalid request received: 'id' member type error."),
-                                    cJSON_CreateNull());
+    return handle;
 }
 
-static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* request,
-                                 const int array_size)
+int mjrpc_destroy_handle(mjrpc_handle_t* handle)
 {
-    int valid_reqs = 0;
-    cJSON* return_json_array = cJSON_CreateArray();
-    for (int i = 0; i < array_size; i++)
+    if (handle == NULL)
+        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
+    for (size_t i = 0; i < handle->capacity; i++)
     {
-        cJSON* obj_req = rpc_handle_obj_req(handle, cJSON_GetArrayItem(request, i));
-        if (obj_req)
+        if (handle->methods[i].state == OCCUPIED)
         {
-            cJSON_AddItemToArray(return_json_array, obj_req);
-            valid_reqs++;
+            free(handle->methods[i].name);
+            if (handle->methods[i].arg != NULL)
+                free(handle->methods[i].arg);
         }
     }
-
-    if (valid_reqs != 0)
-        return return_json_array;
-    // all requests are notifications or invalid
-    return NULL;
+    free(handle->methods);
+    free(handle);
+    return MJRPC_RET_OK;
 }
-
-// ----------------------------------------------------------------------------
-// main functions
 
 int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
                      void* arg2func)
@@ -215,90 +295,56 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
     if (function_pointer == NULL || method_name == NULL)
         return MJRPC_RET_ERROR_INVALID_PARAM;
 
-    const int i = handle->cb_count++;
-    if (!handle->cb_array)
-    {
-        handle->cb_array = malloc(sizeof(struct mjrpc_cb));
-        if (!handle->cb_array)
+    if ((double) handle->size / (double) handle->capacity >= 0.75)
+        if (resize(handle) != MJRPC_RET_OK)
             return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
-    }
-    else
-    {
-        struct mjrpc_cb* ptr =
-            realloc(handle->cb_array, sizeof(struct mjrpc_cb) * handle->cb_count);
-        if (!ptr)
-            return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
-        handle->cb_array = ptr;
-    }
-    handle->cb_array[i].hash = hash_fnv1a_32(method_name);
-    handle->cb_array[i].function = function_pointer;
-    handle->cb_array[i].arg = arg2func;
 
+    unsigned int index = hash(method_name, handle->capacity);
+    size_t probe_count = 0;
+
+    while (handle->methods[index].state != EMPTY && handle->methods[index].state != DELETED)
+    {
+        if (strcmp(handle->methods[index].name, method_name) == 0)
+        {
+            handle->methods[index].func = function_pointer;
+            handle->methods[index].arg = arg2func;
+            return MJRPC_RET_OK;
+        }
+        probe_count++;
+        index = (index + probe_count * probe_count) % handle->capacity;
+    }
+
+    handle->methods[index].name = strdup(method_name);
+    handle->methods[index].func = function_pointer;
+    handle->methods[index].arg = arg2func;
+    handle->methods[index].state = OCCUPIED;
+    handle->size++;
     return MJRPC_RET_OK;
-}
-
-static void cb_info_destroy(struct mjrpc_cb* info)
-{
-    if (info->arg)
-    {
-        free(info->arg);
-        info->arg = NULL;
-    }
 }
 
 int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
 {
-    if (handle == NULL)
-        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
-
     if (name == NULL)
+        return MJRPC_RET_ERROR_INVALID_PARAM;
+    unsigned int index = hash(name, handle->capacity);
+    size_t probe_count = 0;
+
+    while (handle->methods[index].state != EMPTY)
     {
-        for (int i = 0; i < handle->cb_count; i++)
-            cb_info_destroy(&(handle->cb_array[i]));
-        handle->cb_count = 0;
-        free(handle->cb_array);
-        handle->cb_array = NULL;
-    }
-
-    if (handle->cb_array)
-    {
-        const uint32_t hash = hash_fnv1a_32(name);
-        int found = 0;
-        for (int i = 0; i < handle->cb_count; i++)
+        if (handle->methods[index].state == OCCUPIED &&
+            strcmp(handle->methods[index].name, name) == 0)
         {
-            if (found)
-            {
-                handle->cb_array[i - 1] = handle->cb_array[i];
-            }
-            else if (hash == handle->cb_array[i].hash)
-            {
-                found = 1;
-                cb_info_destroy(&(handle->cb_array[i]));
-            }
+            free(handle->methods[index].name);
+            if (handle->methods[index].arg != NULL)
+                free(handle->methods[index].arg);
+            handle->methods[index].state = DELETED;
+            handle->size--;
+            return MJRPC_RET_OK;
         }
-        if (found)
-        {
-            handle->cb_count--;
-            if (handle->cb_count)
-            {
-                struct mjrpc_cb* ptr =
-                    realloc(handle->cb_array, sizeof(struct mjrpc_cb) * handle->cb_count);
-                if (!ptr)
-                    return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
-
-                handle->cb_array = ptr;
-            }
-            else
-            {
-                free(handle->cb_array);
-                handle->cb_array = NULL;
-            }
-        }
+        probe_count++;
+        index = (index + probe_count * probe_count) % handle->capacity;
     }
-    else
-        return MJRPC_RET_ERROR_NOT_FOUND;
-
-    return MJRPC_RET_OK;
+    return MJRPC_RET_ERROR_NOT_FOUND;
 }
 
 char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* ret_code)
@@ -358,7 +404,7 @@ cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, i
     }
     else if (request_cjson->type == cJSON_Object)
     {
-        int obj_size = cJSON_GetArraySize(request_cjson);
+        const int obj_size = cJSON_GetArraySize(request_cjson);
         if (obj_size <= 0)
         {
             ret = MJRPC_RET_ERROR_EMPTY_REQUEST;

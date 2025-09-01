@@ -5,14 +5,14 @@
 #include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
-cJSON* hello_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
+cJSON* hello_world(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
 {
     cJSON* result = cJSON_CreateString("Hello, World!");
     return result;
 }
 
 // Define another simple JSON-RPC method
-cJSON* goodbye_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
+cJSON* goodbye_world(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
 {
     cJSON* result = cJSON_CreateString("Goodbye, World!");
     return result;
@@ -21,11 +21,11 @@ cJSON* goodbye_world(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
 int main()
 {
     // Initialize mjrpc_handle_t
-    mjrpc_handle_t handle = {0};
+    mjrpc_handle_t* handle = mjrpc_create_handle(16);
 
     // Add multiple methods
-    mjrpc_add_method(&handle, hello_world, "hello", NULL);
-    mjrpc_add_method(&handle, goodbye_world, "goodbye", NULL);
+    mjrpc_add_method(handle, hello_world, "hello", NULL);
+    mjrpc_add_method(handle, goodbye_world, "goodbye", NULL);
 
     // Construct a JSON-RPC request
     const char* json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
@@ -33,7 +33,7 @@ int main()
 
     // Process the request
 
-    char* json_response = mjrpc_process_str(&handle, json_request, &result);
+    char* json_response = mjrpc_process_str(handle, json_request, &result);
     // Assert that the result must be MJRPC_RET_OK
     assert(result == MJRPC_RET_OK);
     // Assert that the response contains "Goodbye, World!"
@@ -42,12 +42,12 @@ int main()
     free(json_response);
 
     // Delete a method
-    mjrpc_del_method(&handle, "goodbye");
+    mjrpc_del_method(handle, "goodbye");
 
     // Attempt to call the deleted method
     json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":1}";
 
-    json_response = mjrpc_process_str(&handle, json_request, &result);
+    json_response = mjrpc_process_str(handle, json_request, &result);
     // After deleting the method, calling it again should return an error (but result should still
     // be MJRPC_RET_OK, and the error is in json_response)
     assert(result == MJRPC_RET_OK);
@@ -56,7 +56,9 @@ int main()
     free(json_response);
 
     // Cleanup
-    mjrpc_del_method(&handle, "hello");
+    mjrpc_del_method(handle, "hello");
+
+    mjrpc_destroy_handle(handle);
 
     return 0;
 }
