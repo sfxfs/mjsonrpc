@@ -292,7 +292,7 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
 {
     if (handle == NULL)
         return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
-    if (function_pointer == NULL || arg2func == NULL)
+    if (function_pointer == NULL || method_name == NULL)
         return MJRPC_RET_ERROR_INVALID_PARAM;
 
     if ((double) handle->size / (double) handle->capacity >= 0.75)
