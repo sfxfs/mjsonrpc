@@ -44,15 +44,9 @@ static uint32_t hash_fnv1a_32(const char* str)
 
 cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
 {
-    if (id == NULL)
+    if (id == NULL || result == NULL)
     {
-        if (result)
-            cJSON_Delete(result);
-        return NULL;
-    }
-
-    if (result == NULL)
-    {
+        cJSON_Delete(result);
         cJSON_Delete(id);
         return NULL;
     }
@@ -97,6 +91,10 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
     {
         cJSON_AddStringToObject(error_root, "message", message);
         free(message);
+    }
+    else
+    {
+        cJSON_AddStringToObject(error_root, "message", "No message here.");
     }
 
     cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
