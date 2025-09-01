@@ -6,7 +6,7 @@
 #include "mjsonrpc.h"
 
 // Define a JSON-RPC method with parameters
-cJSON* add(mjrpc_ctx_t* context, cJSON* params, cJSON* id)
+cJSON* add(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
 {
     if (params == NULL || cJSON_GetArraySize(params) != 2)
     {
