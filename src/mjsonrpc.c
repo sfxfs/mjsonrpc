@@ -46,7 +46,7 @@ static unsigned int hash(const char* key, size_t capacity)
     return hash_value % capacity;
 }
 
-static void resize(mjrpc_handle_t* handle)
+static int resize(mjrpc_handle_t* handle)
 {
     const size_t old_capacity = handle->capacity;
     struct mjrpc_method* old_methods = handle->methods;
@@ -58,7 +58,7 @@ static void resize(mjrpc_handle_t* handle)
     {
         handle->capacity = old_capacity;
         handle->methods = old_methods;
-        return;
+        return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
     }
 
     for (size_t i = 0; i < old_capacity; i++)
@@ -70,6 +70,7 @@ static void resize(mjrpc_handle_t* handle)
         }
     }
     free(old_methods);
+    return MJRPC_RET_OK;
 }
 
 static int method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func* func, void** arg)
@@ -100,7 +101,7 @@ static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_n
     cJSON* returned = NULL;
     mjrpc_func func = NULL;
     void* arg = NULL;
-    mjrpc_func_ctx_t ctx;
+    mjrpc_func_ctx_t ctx = {0};
     ctx.error_code = 0;
     ctx.error_message = NULL;
     if (!method_get((mjrpc_handle_t*) handle, method_name, &func, &arg) || !func)
@@ -112,8 +113,7 @@ static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_n
     returned = func(&ctx, params, id);
     if (ctx.error_code)
         return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
-    else
-        return mjrpc_response_ok(returned, id);
+    return mjrpc_response_ok(returned, id);
 }
 
 static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* request)
@@ -158,11 +158,10 @@ static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* requ
                                     strdup("Invalid request received: No 'method' member."),
                                     id_copy);
     }
-    else
-        // Invalid id type
-        return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
-                                    strdup("Invalid request received: 'id' member type error."),
-                                    cJSON_CreateNull());
+    // Invalid id type
+    return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                strdup("Invalid request received: 'id' member type error."),
+                                cJSON_CreateNull());
 }
 
 static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* request,
@@ -250,11 +249,13 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
     return result_root;
 }
 
+#define DEFAULT_INITIAL_CAPACITY 16
+
 mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity)
 {
     if (initial_capacity == 0)
-        initial_capacity = 16;
-    mjrpc_handle_t* handle = (mjrpc_handle_t*) malloc(sizeof(mjrpc_handle_t));
+        initial_capacity = DEFAULT_INITIAL_CAPACITY;
+    mjrpc_handle_t* handle = malloc(sizeof(mjrpc_handle_t));
     if (handle == NULL)
         return NULL;
     handle->capacity = initial_capacity;
@@ -289,10 +290,15 @@ int mjrpc_destroy_handle(mjrpc_handle_t* handle)
 int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
                      void* arg2func)
 {
-    if ((double) handle->size / handle->capacity >= 0.75)
-        resize(handle);
+    if (handle == NULL)
+        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
+    if (function_pointer == NULL || arg2func == NULL)
+        return MJRPC_RET_ERROR_INVALID_PARAM;
 
-    // 重新实现 find_entry_index 以处理插入和查找的逻辑分离
+    if ((double) handle->size / (double) handle->capacity >= 0.75)
+        if (resize(handle) != MJRPC_RET_OK)
+            return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+
     unsigned int index = hash(method_name, handle->capacity);
     size_t probe_count = 0;
 
