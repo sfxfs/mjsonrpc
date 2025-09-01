@@ -95,7 +95,7 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
 
 /**
  * @brief allocate a mjsonrpc handle
- * @param initial_capacity initial capacity of builtin hash table
+ * @param initial_capacity initial capacity of builtin hash table, 0 means use default capacity
  * @return pointer of mjrpc handle (destroy the handle after use)
  */
 mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity);
