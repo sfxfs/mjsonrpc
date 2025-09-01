@@ -25,9 +25,9 @@
 #ifndef MJSONRPC_H_
 #define MJSONRPC_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+// #ifdef __cplusplus
+// extern "C" {
+// #endif
 
 #include "cJSON.h"
 #include <stdint.h>
@@ -63,18 +63,19 @@ typedef struct
     void* data;
     int32_t error_code;
     char* error_message;
-} mjrpc_ctx_t;
+} mjrpc_func_ctx_t;
 
-typedef cJSON* (*mjrpc_func)(mjrpc_ctx_t* context, cJSON* params, cJSON* id);
+typedef cJSON* (*mjrpc_func)(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id);
 
 /**
  * @brief jsonrpc callback function
  */
-struct mjrpc_cb
+struct mjrpc_method
 {
-    uint32_t hash;
-    mjrpc_func function;
+    char* name;
+    mjrpc_func func;
     void* arg;
+    int state;
 };
 
 /**
@@ -82,8 +83,9 @@ struct mjrpc_cb
  */
 typedef struct mjrpc_handle
 {
-    uint16_t cb_count;
-    struct mjrpc_cb* cb_array;
+    struct mjrpc_method* methods;
+    size_t capacity;
+    size_t size;
 } mjrpc_handle_t;
 
 /**
@@ -104,6 +106,20 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id);
 cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
 
 /**
+ * @brief
+ * @param initial_capacity
+ * @return
+ */
+mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity);
+
+/**
+ * @brief
+ * @param handle
+ * @return
+ */
+int mjrpc_destroy_handle(mjrpc_handle_t* handle);
+
+/**
  * @brief add a method to jsonrpc handle
  * @param handle mjrpc handle
  * @param function_pointer callback function
@@ -111,8 +127,8 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
  * @param arg2func argument to callback function
  * @return mjrpc_error_return
  */
-int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer,
-                     const char* method_name, void* arg2func);
+int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
+                     void* arg2func);
 
 /**
  * @brief delete a method from jsonrpc handle
@@ -140,8 +156,8 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* re
  */
 cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code);
 
-#ifdef __cplusplus
-}
-#endif
+// #ifdef __cplusplus
+// }
+// #endif
 
 #endif // MJSONRPC_H_
