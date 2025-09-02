@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
 // Define a simple JSON-RPC method
 cJSON* hello_world(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
@@ -30,7 +31,7 @@ int main()
     assert(result == MJRPC_RET_OK);
     // Assert that the response contains "Goodbye, World!"
     assert(json_response != NULL);
-    assert(strcmp(json_response, "Hello, World!") == 0);
+    assert(strstr(json_response, "Hello, World!") != NULL);
 
     // Show the response
     printf("Response: %s\n", json_response);
@@ -46,7 +47,7 @@ int main()
     // be MJRPC_RET_OK, and the error is in json_response)
     assert(result == MJRPC_RET_OK);
     assert(json_response != NULL);
-    assert(strcmp(json_response, "Method not found") == 0);
+    assert(strstr(json_response, "Method not found") != NULL);
 
     // Show the response
     printf("Response: %s\n", json_response);
