@@ -1,8 +1,8 @@
+#include "mjsonrpc.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-
-#include "mjsonrpc.h"
 
 // Define a simple JSON-RPC method
 cJSON* hello_world(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
@@ -20,14 +20,14 @@ cJSON* goodbye_world(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
 
 int main()
 {
-    // Initialize mjrpc_handle_t
-    mjrpc_handle_t* handle = mjrpc_create_handle(16);
+    // Initialize mjrpc_handle_t, '0' means default
+    mjrpc_handle_t* handle = mjrpc_create_handle(0);
 
     // Add multiple methods
     mjrpc_add_method(handle, hello_world, "hello", NULL);
     mjrpc_add_method(handle, goodbye_world, "goodbye", NULL);
 
-    // Construct a batch JSON-RPC request，include a notification (No "id" member)
+    // Construct a batch JSON-RPC request
     const char* json_request = "["
                                "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1},"
                                "{\"jsonrpc\":\"2.0\",\"method\":\"goodbye\",\"id\":2}"
@@ -37,21 +37,17 @@ int main()
     int result;
     char* json_response = mjrpc_process_str(handle, json_request, &result);
 
-    // Assert that the result must be MJRPC_RET_OK
+    // Result check
     assert(result == MJRPC_RET_OK);
-
-    // Assert that the response is not NULL
     assert(json_response != NULL);
 
-    // Assert that the response contains "Hello, World!" and "Goodbye, World!"
+    // Show the response
     printf("Response: %s\n", json_response);
     free(json_response);
 
     // Cleanup
-    mjrpc_del_method(handle, "hello");
-    mjrpc_del_method(handle, "goodbye");
-
     mjrpc_destroy_handle(handle);
 
+    // End of this example
     return 0;
 }
