@@ -65,7 +65,7 @@ int main()
     assert(result == MJRPC_RET_OK);
     // Assert that the response contains "Division by zero is not allowed."
     assert(json_response != NULL);
-    assert(strcmp(json_response, "Division by zero is not allowed") == 0);
+    assert(strstr(json_response, "Division by zero is not allowed") != NULL);
 
     // Show the response
     printf("Response: %s\n", json_response);
