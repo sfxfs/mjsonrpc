@@ -1,9 +1,9 @@
+#include "mjsonrpc.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-
-#include "mjsonrpc.h"
 
 // Define a JSON-RPC method with parameters
 cJSON* add(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
@@ -24,7 +24,7 @@ cJSON* add(mjrpc_func_ctx_t* context, cJSON* params, cJSON* id)
 
 int main()
 {
-    // Initialize mjrpc_handle_t
+    // Initialize mjrpc_handle_t, '0' means default
     mjrpc_handle_t* handle = mjrpc_create_handle(16);
 
     // Add a method
@@ -33,22 +33,23 @@ int main()
     // Construct a JSON-RPC request with parameters
     const char* json_request =
         "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[2, 3],\"id\":1}";
-    int result;
 
     // Process the request
-
+    int result;
     char* json_response = mjrpc_process_str(handle, json_request, &result);
+
     // Assert that the result must be MJRPC_RET_OK
     assert(result == MJRPC_RET_OK);
     // Assert that the response contains "5" (2+3=5)
     assert(json_response != NULL);
+
+    // Show the response
     printf("Response: %s\n", json_response);
     free(json_response);
 
     // Cleanup
-    mjrpc_del_method(handle, "add");
-
     mjrpc_destroy_handle(handle);
 
+    // End of this example
     return 0;
 }
