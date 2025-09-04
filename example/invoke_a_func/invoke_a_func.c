@@ -19,8 +19,8 @@ int main()
     // Add a method
     mjrpc_add_method(handle, hello_world, "hello", NULL);
 
-    // Construct a JSON-RPC request
-    const char* json_request = "{\"jsonrpc\":\"2.0\",\"method\":\"hello\",\"id\":1}";
+    // Construct a JSON-RPC request: {"jsonrpc":"2.0","method":"hello","id":1}
+    char* json_request = mjrpc_request_str("hello", NULL, cJSON_CreateNumber(1));
     char* json_response = NULL;
 
     // Process the request
@@ -33,7 +33,9 @@ int main()
     assert(json_response != NULL);
 
     // show the response
+    printf("Request: %s\n", json_request);
     printf("Response: %s\n", json_response);
+    free(json_request);
     free(json_response);
 
     // Cleanup

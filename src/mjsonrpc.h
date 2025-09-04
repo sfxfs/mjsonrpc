@@ -76,6 +76,30 @@ typedef struct mjrpc_handle
     size_t size;
 } mjrpc_handle_t;
 
+
+/* --- For client --- */
+
+/**
+ * @brief build a jsonrpc string request
+ * @param method name of method
+ * @param params parameters for the method
+ * @param id request id, can be NULL for notification
+ * @return string pointer
+ */
+char* mjrpc_request_str(const char* method, cJSON* params, cJSON* id);
+
+/**
+ * @brief build a jsonrpc cjson request
+ * @param method name of method
+ * @param params parameters for the method
+ * @param id request id, can be NULL for notification
+ * @return cjson pointer
+ */
+cJSON* mjrpc_request_cjson(const char* method, cJSON* params, cJSON* id);
+
+
+/* --- For server --- */
+
 /**
  * @brief build a jsonrpc response with result
  * @param result call result
