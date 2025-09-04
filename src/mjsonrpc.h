@@ -80,20 +80,20 @@ typedef struct mjrpc_handle
 /* --- For client --- */
 
 /**
- * @brief build a jsonrpc string request
- * @param method name of method
- * @param params parameters for the method
- * @param id request id, can be NULL for notification
- * @return string pointer
+ * @brief Build a jsonrpc string request
+ * @param method Name of method
+ * @param params Parameters for the method, will be released (free)
+ * @param id Request id, can be NULL for notification, will be released (free)
+ * @return String pointer (free this after use), if return NULL, id and params will also be released (free)
  */
 char* mjrpc_request_str(const char* method, cJSON* params, cJSON* id);
 
 /**
- * @brief build a jsonrpc cjson request
- * @param method name of method
- * @param params parameters for the method
- * @param id request id, can be NULL for notification
- * @return cjson pointer
+ * @brief Build a jsonrpc cjson request
+ * @param method Name of method
+ * @param params Parameters for the method, will be owned by the request
+ * @param id Request id, can be NULL for notification, will be owned by the request
+ * @return cJSON pointer (delete this after use), if return NULL, id and params will be released (free)
  */
 cJSON* mjrpc_request_cjson(const char* method, cJSON* params, cJSON* id);
 
@@ -101,70 +101,70 @@ cJSON* mjrpc_request_cjson(const char* method, cJSON* params, cJSON* id);
 /* --- For server --- */
 
 /**
- * @brief build a jsonrpc response with result
- * @param result call result
- * @param id client request id
- * @return cjson pointer
+ * @brief Build a jsonrpc response with result
+ * @param result Result of the method
+ * @param id Client request id
+ * @return cJSON pointer
  */
 cJSON* mjrpc_response_ok(cJSON* result, cJSON* id);
 
 /**
- * @brief build a jsonrpc response with error
- * @param code error code
- * @param message error message
- * @param id client request id
- * @return cjson pointer
+ * @brief Build a jsonrpc response with error
+ * @param code Error code
+ * @param message Error message
+ * @param id Client request id
+ * @return cJSON pointer
  */
 cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
 
 /**
- * @brief allocate a mjsonrpc handle
- * @param initial_capacity initial capacity of builtin hash table, 0 means use default capacity
- * @return pointer of mjrpc handle (destroy the handle after use)
+ * @brief Allocate a mjsonrpc handle
+ * @param initial_capacity Initial capacity of builtin hash table, 0 means use default capacity
+ * @return Pointer of mjrpc handle (destroy the handle after use)
  */
 mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity);
 
 /**
- * @brief destroy (free) a handle
- * @param handle handle to be free
+ * @brief Destroy (free) a handle
+ * @param handle Handle to be free
  * @return enum mjrpc_error_return
  */
 int mjrpc_destroy_handle(mjrpc_handle_t* handle);
 
 /**
- * @brief add a method to jsonrpc handle
+ * @brief Add a method to jsonrpc handle
  * @param handle mjrpc handle
- * @param function_pointer callback function
- * @param method_name method name
- * @param arg2func argument to callback function
+ * @param function_pointer Callback function
+ * @param method_name Method name
+ * @param arg2func Argument to callback function
  * @return enum mjrpc_error_return
  */
 int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
                      void* arg2func);
 
 /**
- * @brief delete a method from jsonrpc handle
+ * @brief Delete a method from jsonrpc handle
  * @param handle mjrpc handle
- * @param method_name method name if NULL, delete all methods
+ * @param method_name Method name to be deleted
  * @return enum mjrpc_error_return
  */
 int mjrpc_del_method(mjrpc_handle_t* handle, const char* method_name);
 
 /**
- * @brief process a string typed jsonrpc request
+ * @brief Process a string typed jsonrpc request
  * @param handle mjrpc handle
- * @param reqeust_str request string
- * @param ret_code return code
- * @return response string (need to be free)
+ * @param reqeust_str Request string
+ * @param ret_code Return code
+ * @return Response string (need to be free)
  */
 char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* ret_code);
 
 /**
- * @brief process a cjson typed jsonrpc request
+ * @brief Process a cjson typed jsonrpc request
  * @param handle mjrpc handle
- * @param request_cjson request cjson
- * @param ret_code return code
- * @return response cjson pointer (need to be free)
+ * @param request_cjson Request cjson
+ * @param ret_code Return code
+ * @return Response cjson pointer (need to be free)
  */
 cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code);
 

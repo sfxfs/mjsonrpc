@@ -189,12 +189,13 @@ static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* requ
 
 cJSON* mjrpc_request_cjson(const char* method, cJSON* params, cJSON* id)
 {
-    if (method == NULL)
-        return NULL;
-
     cJSON* json = cJSON_CreateObject();
-    if (json == NULL)
+    if (json == NULL || method == NULL)
+    {
+        cJSON_Delete(params);
+        cJSON_Delete(id);
         return NULL;
+    }
 
     cJSON_AddStringToObject(json, "jsonrpc", "2.0");
     cJSON_AddStringToObject(json, "method", method);
@@ -210,7 +211,7 @@ char* mjrpc_request_str(const char* method, cJSON* params, cJSON* id)
     if (json == NULL)
         return NULL;
 
-    const char* json_str = cJSON_PrintUnformatted(json);
+    char* json_str = cJSON_PrintUnformatted(json);
     cJSON_Delete(json);
 
     return json_str;
