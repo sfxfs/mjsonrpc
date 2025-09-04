@@ -1,5 +1,7 @@
 # mjsonrpc - A JSON-RPC 2.0 Message Parser and Generator Based on cJSON
 
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/sfxfs/mjsonrpc/memcheck.yml) ![GitHub License](https://img.shields.io/github/license/sfxfs/mjsonrpc) ![GitHub commit activity](https://img.shields.io/github/commit-activity/t/sfxfs/mjsonrpc) ![GitHub top language](https://img.shields.io/github/languages/top/sfxfs/mjsonrpc) ![GitHub repo size](https://img.shields.io/github/repo-size/sfxfs/mjsonrpc) ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/sfxfs/mjsonrpc/latest/total)
+
 [ English | [中文](README_CN.md) ]
 
 ### Introduction
