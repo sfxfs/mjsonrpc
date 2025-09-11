@@ -57,3 +57,6 @@ build*/
 output/
 Testing/
 .DS_Store
+
+# Doxygen generated documentation
+docs/
