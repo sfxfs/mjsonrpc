@@ -26,6 +26,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 /*--- utility ---*/
 
@@ -73,7 +74,7 @@ static int resize(mjrpc_handle_t* handle)
     return MJRPC_RET_OK;
 }
 
-static int method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func* func, void** arg)
+static bool method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func* func, void** arg)
 {
     unsigned int index = hash(key, handle->capacity);
     size_t probe_count = 0;
@@ -85,12 +86,12 @@ static int method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func*
         {
             *func = handle->methods[index].func;
             *arg = handle->methods[index].arg;
-            return 1;
+            return true;
         }
         probe_count++;
         index = (index + probe_count * probe_count) % handle->capacity;
     }
-    return 0;
+    return false;
 }
 
 /*--- private functions ---*/
