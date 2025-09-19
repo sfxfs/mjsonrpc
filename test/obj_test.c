@@ -9,12 +9,6 @@ void tearDown(void) {}
 // 测试对象参数的字段累加
 static cJSON* sum_obj_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
-    if (!params || !cJSON_IsObject(params))
-    {
-        ctx->error_code = JSON_RPC_CODE_INVALID_PARAMS;
-        ctx->error_message = strdup("params must be object");
-        return NULL;
-    }
     int a = 0, b = 0;
     cJSON* a_item = cJSON_GetObjectItem(params, "a");
     cJSON* b_item = cJSON_GetObjectItem(params, "b");
@@ -47,19 +41,7 @@ void test_sum_obj(void)
 // 测试嵌套对象参数
 static cJSON* nested_obj_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
-    if (!params || !cJSON_IsObject(params))
-    {
-        ctx->error_code = JSON_RPC_CODE_INVALID_PARAMS;
-        ctx->error_message = strdup("params must be object");
-        return NULL;
-    }
     cJSON* inner = cJSON_GetObjectItem(params, "inner");
-    if (!inner || !cJSON_IsObject(inner))
-    {
-        ctx->error_code = JSON_RPC_CODE_INVALID_PARAMS;
-        ctx->error_message = strdup("inner must be object");
-        return NULL;
-    }
     cJSON* x = cJSON_GetObjectItem(inner, "x");
     cJSON* y = cJSON_GetObjectItem(inner, "y");
     int sum = 0;
@@ -91,10 +73,30 @@ void test_nested_obj(void)
     mjrpc_destroy_handle(h);
 }
 
+void test_del_method(void)
+{
+    mjrpc_handle_t* h = mjrpc_create_handle(8);
+    // 添加并删除
+    mjrpc_add_method(h, sum_obj_func, "sum_obj", NULL);
+    int ret = mjrpc_del_method(h, "sum_obj");
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
+    // 再次删除应返回 NOT_FOUND
+    ret = mjrpc_del_method(h, "sum_obj");
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_NOT_FOUND, ret);
+    // 删除不存在的方法
+    ret = mjrpc_del_method(h, "no_such");
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_NOT_FOUND, ret);
+    // 删除空方法名
+    ret = mjrpc_del_method(h, NULL);
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_INVALID_PARAM, ret);
+    mjrpc_destroy_handle(h);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_sum_obj);
     RUN_TEST(test_nested_obj);
+    RUN_TEST(test_del_method);
     return UNITY_END();
 }
