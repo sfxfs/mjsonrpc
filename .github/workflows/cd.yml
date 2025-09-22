@@ -47,6 +47,12 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake gcc
 
+      - name: Get architecture info
+        id: arch
+        run: |
+          echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+          echo "platform=linux" >> $GITHUB_OUTPUT
+
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
@@ -63,7 +69,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mjsonrpc-${{ matrix.build_type }}-linux
+          name: mjsonrpc-${{ matrix.build_type }}-${{ steps.arch.outputs.platform }}-${{ steps.arch.outputs.arch }}
           path: dist/${{ matrix.build_type }}/
           retention-days: 7
 
@@ -84,7 +90,7 @@ jobs:
         run: |
           mkdir -p release
           cd artifacts
-          for dir in mjsonrpc-*-linux; do
+          for dir in mjsonrpc-*-linux-*; do
             tar -czf ../release/${dir}.tar.gz ${dir}/
           done
           cd ..
