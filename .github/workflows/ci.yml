@@ -24,3 +24,59 @@ jobs:
 
       - name: Run tests
         run: cd build && ctest --output-on-failure
+
+  test-case-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake gcc lcov
+
+      - name: Configure CMake (with coverage flags)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="--coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: |
+          cd build && ctest --output-on-failure
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory build --output-file coverage.info
+          lcov --remove coverage.info '*/Unity/*' '*/cJSON/*' --output-file coverage.info
+          lcov --list coverage.info
+          genhtml coverage.info --output-directory out
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-html
+          path: out
+
+  memory-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake gcc valgrind
+
+      - name: Configure CMake
+        run: cmake -S . -B build
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests with valgrind
+        run: |
+          cd output
+          for t in mjsonrpc-example-*; do
+            echo "Running valgrind on $t"
+            valgrind --leak-check=full --error-exitcode=1 ./$t || exit 1
+          done
