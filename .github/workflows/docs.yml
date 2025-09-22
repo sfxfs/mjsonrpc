@@ -1,4 +1,4 @@
-name: Generate Documentation
+name: Generate Doxygen Documentation
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 jobs:
   docs:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
