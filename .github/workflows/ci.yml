@@ -7,26 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  test-lcov:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake gcc
-
-      - name: Configure CMake
-        run: cmake -S . -B build
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Run tests
-        run: cd build && ctest --output-on-failure
-
-  test-case-coverage:
-    runs-on: ubuntu-latest
+    name: Tests with Coverage Check
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,18 +21,22 @@ jobs:
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="--coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 
-      - name: Build
+      - name: Build project
         run: cmake --build build
 
       - name: Run tests
         run: |
           cd build && ctest --output-on-failure
 
-      - name: Generate coverage report
+      - name: Check coverage
+        uses: imciner2/run-lcov@v1
+        with:
+          input_directory: build
+          output_file: coverage.info
+          exclude: '"*/Unity/*" "*/cJSON/*"'
+
+      - name: Generate coverage HTML report
         run: |
-          lcov --capture --directory build --output-file coverage.info
-          lcov --remove coverage.info '*/Unity/*' '*/cJSON/*' --output-file coverage.info
-          lcov --list coverage.info
           genhtml coverage.info --output-directory out
 
       - name: Upload coverage artifact
@@ -60,6 +47,7 @@ jobs:
 
   memory-check:
     runs-on: ubuntu-latest
+    name: Memory Check with Valgrind
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,7 +58,7 @@ jobs:
       - name: Configure CMake
         run: cmake -S . -B build
 
-      - name: Build
+      - name: Build project
         run: cmake --build build
 
       - name: Run tests with valgrind

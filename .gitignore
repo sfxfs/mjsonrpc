@@ -51,12 +51,14 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# Personal editor config files
 .idea/
 .vscode/
 build*/
 output/
 Testing/
 .DS_Store
+*.backup
 
 # Doxygen generated documentation
 docs/
