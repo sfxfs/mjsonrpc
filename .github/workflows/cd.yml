@@ -10,6 +10,7 @@ on:
 jobs:
   doxygen-docs:
     runs-on: ubuntu-latest
+    name: Generate and Deploy Doxygen Documentation
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,6 +38,7 @@ jobs:
 
   build-artifacts:
     runs-on: ubuntu-latest
+    name: Build and Package Artifacts
     strategy:
       matrix:
         build_type: [Release, Debug]
@@ -75,6 +77,7 @@ jobs:
 
   create-release:
     runs-on: ubuntu-latest
+    name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [doxygen-docs, build-artifacts]
     steps:
