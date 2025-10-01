@@ -188,6 +188,74 @@ typedef struct mjrpc_handle
 
 
 /**
+ * @defgroup memory_hooks Memory Management Hooks
+ * @brief Custom memory management function hooks
+ * @{
+ */
+
+/**
+ * @typedef mjrpc_malloc_func
+ * @brief Function pointer type for custom memory allocation
+ * 
+ * @param size Number of bytes to allocate
+ * @return Pointer to allocated memory, or NULL on failure
+ * 
+ * @note Should behave like standard malloc() function
+ */
+typedef void* (*mjrpc_malloc_func)(size_t size);
+
+/**
+ * @typedef mjrpc_free_func
+ * @brief Function pointer type for custom memory deallocation
+ * 
+ * @param ptr Pointer to memory to free (can be NULL)
+ * 
+ * @note Should behave like standard free() function
+ */
+typedef void (*mjrpc_free_func)(void* ptr);
+
+/**
+ * @typedef mjrpc_strdup_func
+ * @brief Function pointer type for custom string duplication
+ * 
+ * @param str String to duplicate
+ * @return Pointer to newly allocated duplicate string, or NULL on failure
+ * 
+ * @note Should behave like standard strdup() function
+ */
+typedef char* (*mjrpc_strdup_func)(const char* str);
+
+/**
+ * @brief Set custom memory management functions
+ * 
+ * This function allows users to override the default memory management
+ * functions used by the mjsonrpc library. All parameters must be provided
+ * together, or pass NULL for all to reset to default standard library functions.
+ * 
+ * @param malloc_func Custom malloc function (required if not resetting)
+ * @param free_func Custom free function (required if not resetting)
+ * @param strdup_func Custom strdup function (required if not resetting)
+ * 
+ * @return MJRPC_RET_OK on success, MJRPC_RET_ERROR_INVALID_PARAM on invalid parameters
+ * 
+ * @note Call this function before creating any mjrpc_handle or processing requests
+ * @note To reset to default functions, pass NULL for all parameters
+ * 
+ * @par Example:
+ * @code
+ * // Set custom memory functions
+ * mjrpc_set_memory_hooks(my_malloc, my_free, my_strdup);
+ * 
+ * // Reset to default functions
+ * mjrpc_set_memory_hooks(NULL, NULL, NULL);
+ * @endcode
+ */
+int mjrpc_set_memory_hooks(mjrpc_malloc_func malloc_func, mjrpc_free_func free_func,
+                           mjrpc_strdup_func strdup_func);
+
+/** @} */
+
+/**
  * @defgroup client_api Client API
  * @brief Functions for creating JSON-RPC requests (client side)
  * @{
