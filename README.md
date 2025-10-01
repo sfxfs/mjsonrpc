@@ -6,7 +6,7 @@
 
 ### Introduction
 
-This project is lightweight, has minimal dependencies, and can be integrated into various communication methods (TCP, UDP, message queues, etc.). It is simple to use (with only a few functional APIs) and has good performance (using hash-based indexing instead of polling all methods). It also supports batch calls (JSON Array), automatic generation of corresponding error messages or custom error messages based on requests, and notification requests.
+This project is lightweight, has minimal dependencies, and can be integrated into various communication methods (TCP, UDP, message queues, etc.). It is simple to use (with only a few functional APIs) and has good performance (using hash-based indexing instead of polling all methods). It also supports batch calls (JSON Array), automatic generation of corresponding error messages or custom error messages based on requests, customizable memory management hooks, and notification requests.
 
 ### How to Use
 
