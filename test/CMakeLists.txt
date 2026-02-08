@@ -15,8 +15,12 @@ target_link_libraries(obj_test PRIVATE unity mjsonrpc)
 add_executable(mem_test mem_test.c)
 target_link_libraries(mem_test PRIVATE unity mjsonrpc)
 
+add_executable(regression_test regression_test.c)
+target_link_libraries(regression_test PRIVATE unity mjsonrpc)
+
 add_test(NAME client_test COMMAND client_test)
 add_test(NAME arry_test COMMAND arry_test)
 add_test(NAME err_test COMMAND err_test)
 add_test(NAME obj_test COMMAND obj_test)
 add_test(NAME mem_test COMMAND mem_test)
+add_test(NAME regression_test COMMAND regression_test)
