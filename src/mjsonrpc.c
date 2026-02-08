@@ -60,16 +60,16 @@ static int resize(mjrpc_handle_t* handle)
     struct mjrpc_method* old_methods = handle->methods;
 
     handle->capacity *= 2;
-    handle->size = 0;
     handle->methods =
         (struct mjrpc_method*) g_mjrpc_malloc(handle->capacity * sizeof(struct mjrpc_method));
-    memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
     if (handle->methods == NULL)
     {
         handle->capacity = old_capacity;
         handle->methods = old_methods;
         return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
     }
+    memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
+    handle->size = 0;
 
     for (size_t i = 0; i < old_capacity; i++)
     {
@@ -88,7 +88,7 @@ static bool method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func
     unsigned int index = hash(key, handle->capacity);
     size_t probe_count = 0;
 
-    while (handle->methods[index].state != EMPTY)
+    while (handle->methods[index].state != EMPTY && probe_count < handle->capacity)
     {
         if (handle->methods[index].state == OCCUPIED &&
             strcmp(handle->methods[index].name, key) == 0)
@@ -122,7 +122,10 @@ static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_n
     ctx.data = arg;
     returned = func(&ctx, params, id);
     if (ctx.error_code)
+    {
+        cJSON_Delete(returned);
         return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    }
     return mjrpc_response_ok(returned, id);
 }
 
@@ -192,6 +195,7 @@ static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* requ
     if (valid_reqs != 0)
         return return_json_array;
     // all requests are notifications or invalid
+    cJSON_Delete(return_json_array);
     return NULL;
 }
 
@@ -199,8 +203,15 @@ static cJSON* rpc_handle_ary_req(const mjrpc_handle_t* handle, const cJSON* requ
 
 cJSON* mjrpc_request_cjson(const char* method, cJSON* params, cJSON* id)
 {
+    if (method == NULL)
+    {
+        cJSON_Delete(params);
+        cJSON_Delete(id);
+        return NULL;
+    }
+
     cJSON* json = cJSON_CreateObject();
-    if (json == NULL || method == NULL)
+    if (json == NULL)
     {
         cJSON_Delete(params);
         cJSON_Delete(id);
@@ -238,7 +249,11 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
 
     cJSON* result_root = cJSON_CreateObject();
     if (result_root == NULL)
+    {
+        cJSON_Delete(result);
+        cJSON_Delete(id);
         return NULL;
+    }
 
     cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
     cJSON_AddItemToObject(result_root, "result", result);
@@ -258,11 +273,19 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
 
     cJSON* result_root = cJSON_CreateObject();
     if (result_root == NULL)
+    {
+        if (message)
+            g_mjrpc_free(message);
+        cJSON_Delete(id);
         return NULL;
+    }
 
     cJSON* error_root = cJSON_CreateObject();
     if (error_root == NULL)
     {
+        if (message)
+            g_mjrpc_free(message);
+        cJSON_Delete(id);
         cJSON_Delete(result_root);
         return NULL;
     }
@@ -302,12 +325,12 @@ mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity)
     handle->size = 0;
     handle->methods =
         (struct mjrpc_method*) g_mjrpc_malloc(handle->capacity * sizeof(struct mjrpc_method));
-    memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
     if (handle->methods == NULL)
     {
         g_mjrpc_free(handle);
         return NULL;
     }
+    memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
     return handle;
 }
 
@@ -344,7 +367,8 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
     unsigned int index = hash(method_name, handle->capacity);
     size_t probe_count = 0;
 
-    while (handle->methods[index].state != EMPTY && handle->methods[index].state != DELETED)
+    while (handle->methods[index].state != EMPTY && handle->methods[index].state != DELETED &&
+           probe_count < handle->capacity)
     {
         if (strcmp(handle->methods[index].name, method_name) == 0)
         {
@@ -366,12 +390,14 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
 
 int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
 {
+    if (handle == NULL)
+        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
     if (name == NULL)
         return MJRPC_RET_ERROR_INVALID_PARAM;
     unsigned int index = hash(name, handle->capacity);
     size_t probe_count = 0;
 
-    while (handle->methods[index].state != EMPTY)
+    while (handle->methods[index].state != EMPTY && probe_count < handle->capacity)
     {
         if (handle->methods[index].state == OCCUPIED &&
             strcmp(handle->methods[index].name, name) == 0)
@@ -389,9 +415,9 @@ int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
     return MJRPC_RET_ERROR_NOT_FOUND;
 }
 
-char* mjrpc_process_str(mjrpc_handle_t* handle, const char* reqeust_str, int* ret_code)
+char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* ret_code)
 {
-    cJSON* request = cJSON_Parse(reqeust_str);
+    cJSON* request = cJSON_Parse(request_str);
     cJSON* response = mjrpc_process_cjson(handle, request, ret_code);
     cJSON_Delete(request);
     if (response)

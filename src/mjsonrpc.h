@@ -67,10 +67,10 @@ extern "C" {
 #define JSON_RPC_CODE_METHOD_NOT_FOUND (-32601)
 
 /** @brief Invalid params - Invalid method parameter(s) */
-#define JSON_RPC_CODE_INVALID_PARAMS (-32603)
+#define JSON_RPC_CODE_INVALID_PARAMS (-32602)
 
 /** @brief Internal error - Internal JSON-RPC error */
-#define JSON_RPC_CODE_INTERNAL_ERROR (-32693)
+#define JSON_RPC_CODE_INTERNAL_ERROR (-32603)
 
 /** @brief Reserved for implementation-defined server-errors (-32000 to -32099) */
 // -32000 to -32099 Reserved for implementation-defined server-errors.
@@ -240,6 +240,10 @@ typedef char* (*mjrpc_strdup_func)(const char* str);
  * 
  * @note Call this function before creating any mjrpc_handle or processing requests
  * @note To reset to default functions, pass NULL for all parameters
+ * @note These hooks only affect memory allocations made by mjsonrpc internally
+ *       (handle, method names, error messages). They do NOT affect cJSON's own
+ *       allocations. Strings returned by mjrpc_process_str() are allocated by
+ *       cJSON (via cJSON_PrintUnformatted) and must be freed with standard free().
  * 
  * @par Example:
  * @code
@@ -465,7 +469,10 @@ int mjrpc_destroy_handle(mjrpc_handle_t* handle);
  * @param handle JSON-RPC handle (must not be NULL)
  * @param function_pointer Callback function for the method (must not be NULL)
  * @param method_name Name of the method (must not be NULL)
- * @param arg2func User argument passed to the callback function (can be NULL)
+ * @param arg2func User argument passed to the callback function (can be NULL).
+ *                  If not NULL, it must be heap-allocated (via malloc/calloc),
+ *                  as it will be automatically freed when the method is deleted
+ *                  or the handle is destroyed.
  * 
  * @return Error code from enum mjrpc_error_return
  * @retval MJRPC_RET_OK If successful
