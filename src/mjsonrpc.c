@@ -293,6 +293,8 @@ cJSON* mjrpc_response_error(int code, const char* message, cJSON* id)
             cJSON_Delete(id);
             return NULL;
         }
+        // Free the original message since caller no longer owns it
+        g_mjrpc_free((void*) message);
     }
 
     if (id == NULL)
