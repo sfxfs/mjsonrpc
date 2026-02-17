@@ -6,7 +6,17 @@
 
 ### Introduction
 
-This project is lightweight, has minimal dependencies, and can be integrated into various communication methods (TCP, UDP, message queues, etc.). It is simple to use (with only a few functional APIs) and has good performance (using hash-based indexing instead of polling all methods). It also supports batch calls (JSON Array), automatic generation of corresponding error messages or custom error messages based on requests, customizable memory management hooks, and notification requests.
+This project is lightweight, has minimal dependencies, and can be integrated into various communication methods (TCP, UDP, message queues, etc.). It is simple to use (with only a few functional APIs) and has good performance (using hash-based indexing instead of polling all methods). It also supports batch calls (JSON Array), automatic generation of corresponding error messages or custom error messages based on requests, customizable memory management hooks, notification requests, and more.
+
+### Features
+
+- **Lightweight & Minimal Dependencies**: Only depends on cJSON
+- **Hash-based Method Indexing**: Fast method lookup
+- **Batch Requests**: Support for JSON Array batch calls
+- **Customizable Memory Management**: User-defined malloc/free/strdup hooks
+- **Thread-Safe**: Thread-local storage for memory hooks
+- **POSIX Array Params**: Support for both object and array parameters
+- **Method Enumeration**: Query registered methods at runtime
 
 ### How to Use
 

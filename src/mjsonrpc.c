@@ -30,10 +30,20 @@
 
 /*--- memory management hooks ---*/
 
-// Global memory function pointers, default to standard library functions
-static mjrpc_malloc_func g_mjrpc_malloc = malloc;
-static mjrpc_free_func g_mjrpc_free = free;
-static mjrpc_strdup_func g_mjrpc_strdup = strdup;
+// Thread-local storage for memory function pointers, default to standard library functions
+static _Thread_local mjrpc_malloc_func g_mjrpc_malloc = NULL;
+static _Thread_local mjrpc_free_func g_mjrpc_free = NULL;
+static _Thread_local mjrpc_strdup_func g_mjrpc_strdup = NULL;
+
+static inline void init_memory_hooks_if_needed(void)
+{
+    if (g_mjrpc_malloc == NULL)
+        g_mjrpc_malloc = malloc;
+    if (g_mjrpc_free == NULL)
+        g_mjrpc_free = free;
+    if (g_mjrpc_strdup == NULL)
+        g_mjrpc_strdup = strdup;
+}
 
 /*--- utility ---*/
 
@@ -56,6 +66,7 @@ static unsigned int hash(const char* key, size_t capacity)
 
 static int resize(mjrpc_handle_t* handle)
 {
+    init_memory_hooks_if_needed();
     const size_t old_capacity = handle->capacity;
     struct mjrpc_method* old_methods = handle->methods;
 
@@ -106,14 +117,16 @@ static bool method_get(const mjrpc_handle_t* handle, const char* key, mjrpc_func
 /*--- private functions ---*/
 
 static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_name, cJSON* params,
-                              cJSON* id)
+                              cJSON* id, int params_type)
 {
+    init_memory_hooks_if_needed();
     cJSON* returned = NULL;
     mjrpc_func func = NULL;
     void* arg = NULL;
     mjrpc_func_ctx_t ctx = {0};
     ctx.error_code = 0;
     ctx.error_message = NULL;
+    ctx.params_type = params_type;
     if (!method_get((mjrpc_handle_t*) handle, method_name, &func, &arg) || !func)
     {
         return mjrpc_response_error(JSON_RPC_CODE_METHOD_NOT_FOUND,
@@ -131,6 +144,7 @@ static cJSON* invoke_callback(const mjrpc_handle_t* handle, const char* method_n
 
 static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* request)
 {
+    init_memory_hooks_if_needed();
     cJSON* id = cJSON_GetObjectItem(request, "id");
 
 #ifdef cJSON_Int
@@ -147,11 +161,7 @@ static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* requ
                 id_copy = cJSON_CreateNull();
             else
                 id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) :
-#ifdef cJSON_Int
-                                                     cJSON_CreateInt(id->valueint);
-#else
-                                                     cJSON_CreateNumber(id->valueint);
-#endif
+                                                     cJSON_CreateNumber(id->valuedouble);
         }
         const cJSON* version = cJSON_GetObjectItem(request, "jsonrpc");
         if (version == NULL || version->type != cJSON_String ||
@@ -165,7 +175,14 @@ static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* requ
         {
             cJSON* params = cJSON_GetObjectItem(request, "params");
 
-            return invoke_callback(handle, method->valuestring, params, id_copy);
+            // Determine params type: 0=object, 1=array, 2=no params
+            int actual_params_type = 2; // no params by default
+            if (params != NULL)
+            {
+                actual_params_type = (params->type == cJSON_Array) ? 1 : 0;
+            }
+
+            return invoke_callback(handle, method->valuestring, params, id_copy, actual_params_type);
         }
         return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
                                     g_mjrpc_strdup("Invalid request received: No 'method' member."),
@@ -262,20 +279,34 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id)
     return result_root;
 }
 
-cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
+cJSON* mjrpc_response_error(int code, const char* message, cJSON* id)
 {
+    init_memory_hooks_if_needed();
+
+    // Make a copy of message if provided, since we take ownership
+    char* message_copy = NULL;
+    if (message != NULL)
+    {
+        message_copy = g_mjrpc_strdup(message);
+        if (message_copy == NULL)
+        {
+            cJSON_Delete(id);
+            return NULL;
+        }
+    }
+
     if (id == NULL)
     {
-        if (message)
-            g_mjrpc_free(message);
+        if (message_copy)
+            g_mjrpc_free(message_copy);
         return NULL;
     }
 
     cJSON* result_root = cJSON_CreateObject();
     if (result_root == NULL)
     {
-        if (message)
-            g_mjrpc_free(message);
+        if (message_copy)
+            g_mjrpc_free(message_copy);
         cJSON_Delete(id);
         return NULL;
     }
@@ -283,22 +314,18 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
     cJSON* error_root = cJSON_CreateObject();
     if (error_root == NULL)
     {
-        if (message)
-            g_mjrpc_free(message);
+        if (message_copy)
+            g_mjrpc_free(message_copy);
         cJSON_Delete(id);
         cJSON_Delete(result_root);
         return NULL;
     }
 
-#ifdef cJSON_Int
-    cJSON_AddIntToObject(error_root, "code", code);
-#else
     cJSON_AddNumberToObject(error_root, "code", code);
-#endif
-    if (message)
+    if (message_copy)
     {
-        cJSON_AddStringToObject(error_root, "message", message);
-        g_mjrpc_free(message);
+        cJSON_AddStringToObject(error_root, "message", message_copy);
+        g_mjrpc_free(message_copy);
     }
     else
     {
@@ -316,6 +343,7 @@ cJSON* mjrpc_response_error(int code, char* message, cJSON* id)
 
 mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity)
 {
+    init_memory_hooks_if_needed();
     if (initial_capacity == 0)
         initial_capacity = DEFAULT_INITIAL_CAPACITY;
     mjrpc_handle_t* handle = g_mjrpc_malloc(sizeof(mjrpc_handle_t));
@@ -336,6 +364,7 @@ mjrpc_handle_t* mjrpc_create_handle(size_t initial_capacity)
 
 int mjrpc_destroy_handle(mjrpc_handle_t* handle)
 {
+    init_memory_hooks_if_needed();
     if (handle == NULL)
         return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
     for (size_t i = 0; i < handle->capacity; i++)
@@ -355,6 +384,7 @@ int mjrpc_destroy_handle(mjrpc_handle_t* handle)
 int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const char* method_name,
                      void* arg2func)
 {
+    init_memory_hooks_if_needed();
     if (handle == NULL)
         return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
     if (function_pointer == NULL || method_name == NULL)
@@ -390,6 +420,7 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
 
 int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
 {
+    init_memory_hooks_if_needed();
     if (handle == NULL)
         return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
     if (name == NULL)
@@ -415,6 +446,32 @@ int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
     return MJRPC_RET_ERROR_NOT_FOUND;
 }
 
+size_t mjrpc_get_method_count(mjrpc_handle_t* handle)
+{
+    if (handle == NULL)
+        return 0;
+    return handle->size;
+}
+
+int mjrpc_enum_methods(mjrpc_handle_t* handle,
+    void (*callback)(const char* method_name, void* arg, void* user_data),
+    void* user_data)
+{
+    if (handle == NULL)
+        return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
+    if (callback == NULL)
+        return MJRPC_RET_ERROR_INVALID_PARAM;
+
+    for (size_t i = 0; i < handle->capacity; i++)
+    {
+        if (handle->methods[i].state == OCCUPIED)
+        {
+            callback(handle->methods[i].name, handle->methods[i].arg, user_data);
+        }
+    }
+    return MJRPC_RET_OK;
+}
+
 char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* ret_code)
 {
     cJSON* request = cJSON_Parse(request_str);
@@ -431,6 +488,7 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* re
 
 cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code)
 {
+    init_memory_hooks_if_needed();
     int ret = MJRPC_RET_OK;
     if (handle == NULL)
     {
@@ -506,6 +564,9 @@ cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, i
 int mjrpc_set_memory_hooks(mjrpc_malloc_func malloc_func, mjrpc_free_func free_func,
                            mjrpc_strdup_func strdup_func)
 {
+    // Initialize defaults if not yet initialized
+    init_memory_hooks_if_needed();
+
     // If all parameters are NULL, reset to default functions
     if (malloc_func == NULL && free_func == NULL && strdup_func == NULL)
     {
