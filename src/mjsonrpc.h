@@ -114,7 +114,7 @@ enum mjrpc_error_return
 /**
  * @struct mjrpc_func_ctx_t
  * @brief Context structure passed to RPC method callback functions
- * 
+ *
  * This structure provides context information and error handling capabilities
  * to RPC method implementations.
  */
@@ -122,12 +122,15 @@ typedef struct
 {
     /** @brief User data pointer passed during method registration */
     void* data;
-    
+
     /** @brief Error code to be set by the method implementation (0 = no error) */
     int32_t error_code;
-    
+
     /** @brief Error message to be set by the method implementation (will be freed automatically) */
     char* error_message;
+
+    /** @brief Parameter type: 0=object, 1=array, 2=no params */
+    int params_type;
 } mjrpc_func_ctx_t;
 
 /**
@@ -369,31 +372,30 @@ cJSON* mjrpc_response_ok(cJSON* result, cJSON* id);
 
 /**
  * @brief Build an error JSON-RPC response
- * 
+ *
  * Creates a JSON-RPC 2.0 error response object with the specified error
  * code, message, and request ID.
- * 
+ *
  * @param code Error code (standard JSON-RPC codes or custom codes)
- * @param message Error message (will be freed automatically, can be NULL)
+ * @param message Error message (will be copied internally, can be NULL)
  * @param id Client request ID (will be owned by response)
- * 
+ *
  * @return cJSON pointer containing the error response (caller must delete)
  * @retval NULL If an error occurred (message and id will be released)
- * 
+ *
  * @note If message is NULL, a default message will be used
- * 
+ *
  * @par Example:
  * @code
  * cJSON *id = cJSON_CreateNumber(1);
- * char *msg = strdup("Invalid parameters");
- * cJSON *response = mjrpc_response_error(JSON_RPC_CODE_INVALID_PARAMS, msg, id);
+ * cJSON *response = mjrpc_response_error(JSON_RPC_CODE_INVALID_PARAMS, "Invalid parameters", id);
  * if (response) {
  *     // Send error response...
  *     cJSON_Delete(response);
  * }
  * @endcode
  */
-cJSON* mjrpc_response_error(int code, char* message, cJSON* id);
+cJSON* mjrpc_response_error(int code, const char* message, cJSON* id);
 
 /** @} */
 
@@ -522,6 +524,51 @@ int mjrpc_add_method(mjrpc_handle_t* handle, mjrpc_func function_pointer, const 
  * @endcode
  */
 int mjrpc_del_method(mjrpc_handle_t* handle, const char* method_name);
+
+/**
+ * @brief Get the number of registered methods
+ *
+ * Returns the current number of registered RPC methods in the handle.
+ *
+ * @param handle JSON-RPC handle (must not be NULL)
+ *
+ * @return Number of registered methods
+ * @retval 0 If handle is NULL or no methods are registered
+ *
+ * @par Example:
+ * @code
+ * size_t count = mjrpc_get_method_count(handle);
+ * printf("Registered methods: %zu\n", count);
+ * @endcode
+ */
+size_t mjrpc_get_method_count(mjrpc_handle_t* handle);
+
+/**
+ * @brief Enumerate all registered methods
+ *
+ * Iterates through all registered RPC methods and calls the provided
+ * callback function for each method.
+ *
+ * @param handle JSON-RPC handle (must not be NULL)
+ * @param callback Callback function to be called for each method
+ * @param user_data User data pointer passed to the callback
+ *
+ * @return Error code from enum mjrpc_error_return
+ * @retval MJRPC_RET_OK If successful
+ * @retval MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED If handle is NULL
+ * @retval MJRPC_RET_ERROR_INVALID_PARAM If callback is NULL
+ *
+ * @par Example:
+ * @code
+ * void print_method(const char *name, void *arg, void *user_data) {
+ *     printf("Method: %s\n", name);
+ * }
+ * mjrpc_enum_methods(handle, print_method, NULL);
+ * @endcode
+ */
+int mjrpc_enum_methods(mjrpc_handle_t* handle,
+    void (*callback)(const char* method_name, void* arg, void* user_data),
+    void* user_data);
 
 /** @} */
 
