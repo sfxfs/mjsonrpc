@@ -3,7 +3,7 @@
  * @brief A lightweight JSON-RPC 2.0 message parser and generator based on cJSON
  * @author Xiao
  * @date 2024
- * @version 1.0
+ * @version 2.4.0
  * 
  * @details
  * This library provides a complete implementation of JSON-RPC 2.0 specification
