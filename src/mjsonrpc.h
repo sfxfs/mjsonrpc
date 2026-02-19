@@ -2,7 +2,7 @@
  * @file mjsonrpc.h
  * @brief A lightweight JSON-RPC 2.0 message parser and generator based on cJSON
  * @author Xiao
- * @date 2024
+ * @date 2026
  * @version 2.4.0
  * 
  * @details
@@ -20,7 +20,7 @@
  * @copyright
  * MIT License
  *
- * Copyright (c) 2024 Xiao
+ * Copyright (c) 2026 Xiao
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
