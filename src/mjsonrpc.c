@@ -49,6 +49,9 @@ static inline void init_memory_hooks_if_needed(void) {
 
 enum method_state { EMPTY, OCCUPIED, DELETED };
 
+/** @brief Hash table load factor threshold for resize */
+#define HASH_LOAD_FACTOR 0.75
+
 static unsigned int hash(const char *key, size_t capacity) {
   if (key == NULL)
     return 0;
@@ -77,9 +80,15 @@ static int resize(mjrpc_handle_t *handle) {
 
   for (size_t i = 0; i < old_capacity; i++) {
     if (old_methods[i].state == OCCUPIED) {
-      mjrpc_add_method(handle, old_methods[i].func, old_methods[i].name,
-                       old_methods[i].arg);
+      int add_result = mjrpc_add_method(
+          handle, old_methods[i].func, old_methods[i].name, old_methods[i].arg);
       g_mjrpc_free(old_methods[i].name);
+      if (add_result != MJRPC_RET_OK) {
+        // Failed to add method during resize, free the arg to prevent leak
+        g_mjrpc_free(old_methods[i].arg);
+      }
+      // Note: old_methods[i].arg is now owned by the new method entry in the
+      // new table (if add succeeded)
     }
   }
   g_mjrpc_free(old_methods);
@@ -337,7 +346,7 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
   if (function_pointer == NULL || method_name == NULL)
     return MJRPC_RET_ERROR_INVALID_PARAM;
 
-  if ((double)handle->size / (double)handle->capacity >= 0.75)
+  if ((double)handle->size / (double)handle->capacity >= HASH_LOAD_FACTOR)
     if (resize(handle) != MJRPC_RET_OK)
       return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
 
