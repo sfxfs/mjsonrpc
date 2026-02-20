@@ -418,7 +418,7 @@ int mjrpc_del_method(mjrpc_handle_t* handle, const char* name)
     return MJRPC_RET_ERROR_NOT_FOUND;
 }
 
-size_t mjrpc_get_method_count(mjrpc_handle_t* handle)
+size_t mjrpc_get_method_count(const mjrpc_handle_t* handle)
 {
     if (handle == NULL)
         return 0;
@@ -444,7 +444,7 @@ int mjrpc_enum_methods(mjrpc_handle_t* handle,
     return MJRPC_RET_OK;
 }
 
-char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* ret_code)
+char* mjrpc_process_str(const mjrpc_handle_t* handle, const char* request_str, int* ret_code)
 {
     cJSON* request = cJSON_Parse(request_str);
     cJSON* response = mjrpc_process_cjson(handle, request, ret_code);
@@ -458,7 +458,7 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* re
     return NULL;
 }
 
-cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code)
+cJSON* mjrpc_process_cjson(const mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code)
 {
     init_memory_hooks_if_needed();
     int ret = MJRPC_RET_OK;
