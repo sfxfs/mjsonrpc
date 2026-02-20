@@ -192,16 +192,18 @@ void test_bug4_callback_error_no_leak(void)
     mjrpc_set_memory_hooks(tracking_malloc, tracking_free, tracking_strdup);
     alloc_balance = 0;
 
-    mjrpc_handle_t* h = mjrpc_create_handle(8);
+    mjrpc_handle_t* h = mjrpc_create_handle(0);
     TEST_ASSERT_NOT_NULL(h);
     mjrpc_add_method(h, error_and_return_func_tracked, "err_ret", NULL);
 
     cJSON* id = cJSON_CreateNumber(1);
     cJSON* req = mjrpc_request_cjson("err_ret", NULL, id);
+    TEST_ASSERT_NOT_NULL(req);
     int code = -1;
     cJSON* resp = mjrpc_process_cjson(h, req, &code);
     TEST_ASSERT_NOT_NULL(resp);
 
+    cJSON_Delete(req);
     cJSON_Delete(resp);
     mjrpc_destroy_handle(h);
 
