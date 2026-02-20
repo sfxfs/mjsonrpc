@@ -59,10 +59,7 @@ void setUp(void)
     alloc_balance = 0;
 }
 
-void tearDown(void)
-{
-    mjrpc_set_memory_hooks(NULL, NULL, NULL);
-}
+void tearDown(void) { mjrpc_set_memory_hooks(NULL, NULL, NULL); }
 
 /* ================================================================== */
 /*  Helper callbacks                                                  */
@@ -71,9 +68,9 @@ void tearDown(void)
 /* A simple notification handler (returns NULL, no error) */
 static cJSON* notif_handler(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
-    (void)ctx;
-    (void)params;
-    (void)id;
+    (void) ctx;
+    (void) params;
+    (void) id;
     return NULL; /* notification: no result */
 }
 
@@ -81,8 +78,8 @@ static cJSON* notif_handler(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
  * Before the fix, the returned cJSON would be leaked. */
 static cJSON* error_and_return_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
-    (void)params;
-    (void)id;
+    (void) params;
+    (void) id;
     ctx->error_code = -32001;
     ctx->error_message = strdup("callback error");
     /* Deliberately return a cJSON object that should be freed by the library */
@@ -92,9 +89,9 @@ static cJSON* error_and_return_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON*
 /* A trivial OK handler */
 static cJSON* ok_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
-    (void)ctx;
-    (void)params;
-    (void)id;
+    (void) ctx;
+    (void) params;
+    (void) id;
     return cJSON_CreateString("ok");
 }
 
@@ -178,8 +175,8 @@ void test_bug4_callback_error_with_return(void)
  * so the tracking allocator stays balanced. */
 static cJSON* error_and_return_func_tracked(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
-    (void)params;
-    (void)id;
+    (void) params;
+    (void) id;
     ctx->error_code = -32001;
     /* Use tracking_strdup so the allocation is balanced with tracking_free */
     ctx->error_message = tracking_strdup("callback error");
@@ -207,8 +204,8 @@ void test_bug4_callback_error_no_leak(void)
     cJSON_Delete(resp);
     mjrpc_destroy_handle(h);
 
-    TEST_ASSERT_EQUAL_INT_MESSAGE(0, alloc_balance,
-                                  "BUG-4: memory leak when callback sets error_code and returns cJSON");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(
+        0, alloc_balance, "BUG-4: memory leak when callback sets error_code and returns cJSON");
 }
 
 /* ================================================================== */
