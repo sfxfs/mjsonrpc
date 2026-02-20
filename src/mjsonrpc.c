@@ -22,8 +22,6 @@
     SOFTWARE.
  */
 
-#define _DEFAULT_SOURCE /* for strdup */
-
 #include "mjsonrpc.h"
 
 #include <stdlib.h>
@@ -290,7 +288,7 @@ cJSON* mjrpc_response_error(int code, const char* message, cJSON* id)
     if (result_root == NULL || error_root == NULL || id == NULL)
     {
         if (message)
-            free((void*) message); // Free the message string if it was allocated
+            g_mjrpc_free((void*) message); // Free the message string if it was allocated
         cJSON_Delete(id);
         cJSON_Delete(error_root);
         cJSON_Delete(result_root);
@@ -301,7 +299,7 @@ cJSON* mjrpc_response_error(int code, const char* message, cJSON* id)
     if (message)
     {
         cJSON_AddStringToObject(error_root, "message", message);
-        free((void*) message); // Free the message string after adding to JSON
+        g_mjrpc_free((void*) message); // Free the message string after adding to JSON
     }
     else
         cJSON_AddStringToObject(error_root, "message", "No message here.");

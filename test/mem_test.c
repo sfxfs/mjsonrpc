@@ -5,9 +5,9 @@
 #include <string.h>
 
 // Memory tracking for hook tests
-static size_t custom_malloc_count = 0;
-static size_t custom_free_count = 0;
-static size_t custom_strdup_count = 0;
+static uint32_t custom_malloc_count = 0;
+static uint32_t custom_free_count = 0;
+static uint32_t custom_strdup_count = 0;
 
 // Custom memory functions for testing hooks
 static void* test_malloc(size_t size)
