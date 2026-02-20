@@ -1,0 +1,22 @@
+#!/bin/bash
+# Pre-commit hook to format code with clang-format
+
+# Files to format
+FILES=()
+
+# Get list of staged .c and .h files
+for file in $(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|h)$'); do
+    if [ -f "$file" ]; then
+        FILES+=("$file")
+    fi
+done
+
+# If there are files to format
+if [ ${#FILES[@]} -gt 0 ]; then
+    echo "Formatting code with clang-format..."
+    clang-format -i "${FILES[@]}"
+    
+    # Add formatted files back to staging
+    git add "${FILES[@]}"
+    echo "Code formatted and re-staged."
+fi
