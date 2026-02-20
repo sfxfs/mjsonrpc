@@ -541,7 +541,7 @@ int mjrpc_del_method(mjrpc_handle_t* handle, const char* method_name);
  * printf("Registered methods: %zu\n", count);
  * @endcode
  */
-size_t mjrpc_get_method_count(mjrpc_handle_t* handle);
+size_t mjrpc_get_method_count(const mjrpc_handle_t* handle);
 
 /**
  * @brief Enumerate all registered methods
@@ -607,7 +607,7 @@ int mjrpc_enum_methods(mjrpc_handle_t* handle,
  * }
  * @endcode
  */
-char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* ret_code);
+char* mjrpc_process_str(const mjrpc_handle_t* handle, const char* request_str, int* ret_code);
 
 /**
  * @brief Process a JSON-RPC request cJSON object
@@ -639,7 +639,7 @@ char* mjrpc_process_str(mjrpc_handle_t* handle, const char* request_str, int* re
  * cJSON_Delete(request);
  * @endcode
  */
-cJSON* mjrpc_process_cjson(mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code);
+cJSON* mjrpc_process_cjson(const mjrpc_handle_t* handle, const cJSON* request_cjson, int* ret_code);
 
 /** @} */
 /** @} */
