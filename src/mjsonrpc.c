@@ -160,8 +160,8 @@ static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* requ
             if (id->type == cJSON_NULL)
                 id_copy = cJSON_CreateNull();
             else
-                id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring) :
-                                                     cJSON_CreateNumber(id->valuedouble);
+                id_copy = (id->type == cJSON_String) ? cJSON_CreateString(id->valuestring)
+                                                     : cJSON_CreateNumber(id->valuedouble);
         }
         const cJSON* version = cJSON_GetObjectItem(request, "jsonrpc");
         if (version == NULL || version->type != cJSON_String ||
@@ -182,7 +182,8 @@ static cJSON* rpc_handle_obj_req(const mjrpc_handle_t* handle, const cJSON* requ
                 actual_params_type = (params->type == cJSON_Array) ? 1 : 0;
             }
 
-            return invoke_callback(handle, method->valuestring, params, id_copy, actual_params_type);
+            return invoke_callback(handle, method->valuestring, params, id_copy,
+                                   actual_params_type);
         }
         return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
                                     g_mjrpc_strdup("Invalid request received: No 'method' member."),
@@ -426,8 +427,8 @@ size_t mjrpc_get_method_count(const mjrpc_handle_t* handle)
 }
 
 int mjrpc_enum_methods(mjrpc_handle_t* handle,
-    void (*callback)(const char* method_name, void* arg, void* user_data),
-    void* user_data)
+                       void (*callback)(const char* method_name, void* arg, void* user_data),
+                       void* user_data)
 {
     if (handle == NULL)
         return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
