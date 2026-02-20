@@ -285,56 +285,26 @@ cJSON* mjrpc_response_error(int code, const char* message, cJSON* id)
 {
     init_memory_hooks_if_needed();
 
-    // Make a copy of message if provided, since we take ownership
-    char* message_copy = NULL;
-    if (message != NULL)
-    {
-        message_copy = g_mjrpc_strdup(message);
-        if (message_copy == NULL)
-        {
-            cJSON_Delete(id);
-            return NULL;
-        }
-        // Free the original message since caller no longer owns it
-        g_mjrpc_free((void*) message);
-    }
-
-    if (id == NULL)
-    {
-        if (message_copy)
-            g_mjrpc_free(message_copy);
-        return NULL;
-    }
-
     cJSON* result_root = cJSON_CreateObject();
-    if (result_root == NULL)
-    {
-        if (message_copy)
-            g_mjrpc_free(message_copy);
-        cJSON_Delete(id);
-        return NULL;
-    }
-
     cJSON* error_root = cJSON_CreateObject();
-    if (error_root == NULL)
+    if (result_root == NULL || error_root == NULL || id == NULL)
     {
-        if (message_copy)
-            g_mjrpc_free(message_copy);
+        if (message)
+            free((void*) message); // Free the message string if it was allocated
         cJSON_Delete(id);
+        cJSON_Delete(error_root);
         cJSON_Delete(result_root);
         return NULL;
     }
 
     cJSON_AddNumberToObject(error_root, "code", code);
-    if (message_copy)
+    if (message)
     {
-        cJSON_AddStringToObject(error_root, "message", message_copy);
-        g_mjrpc_free(message_copy);
+        cJSON_AddStringToObject(error_root, "message", message);
+        free((void*) message); // Free the message string after adding to JSON
     }
     else
-    {
         cJSON_AddStringToObject(error_root, "message", "No message here.");
-    }
 
     cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
     cJSON_AddItemToObject(result_root, "error", error_root);
