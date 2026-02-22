@@ -52,12 +52,24 @@ enum method_state { EMPTY, OCCUPIED, DELETED };
 /** @brief Hash table load factor threshold for resize */
 #define HASH_LOAD_FACTOR 0.75
 
-static unsigned int hash(const char *key, size_t capacity) {
+/** @brief Default hash table initial capacity */
+#define DEFAULT_INITIAL_CAPACITY 16
+
+/** @brief Hash multiplier for string hashing */
+#define HASH_MULTIPLIER 31
+
+/**
+ * @brief Compute hash value for a string key
+ * @param key String key to hash (must not be NULL for valid hash)
+ * @param capacity Hash table capacity
+ * @return Hash value modulo capacity
+ */
+static size_t hash(const char *key, size_t capacity) {
   if (key == NULL)
     return 0;
-  unsigned int hash_value = 0;
+  size_t hash_value = 0;
   while (*key) {
-    hash_value = (hash_value * 31) + (*key++);
+    hash_value = (hash_value * HASH_MULTIPLIER) + (unsigned char)(*key++);
   }
   return hash_value % capacity;
 }
@@ -66,6 +78,11 @@ static int resize(mjrpc_handle_t *handle) {
   init_memory_hooks_if_needed();
   const size_t old_capacity = handle->capacity;
   struct mjrpc_method *old_methods = handle->methods;
+
+  // Check for potential overflow
+  if (old_capacity > SIZE_MAX / 2) {
+    return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+  }
 
   handle->capacity *= 2;
   handle->methods = (struct mjrpc_method *)g_mjrpc_malloc(
@@ -80,15 +97,20 @@ static int resize(mjrpc_handle_t *handle) {
 
   for (size_t i = 0; i < old_capacity; i++) {
     if (old_methods[i].state == OCCUPIED) {
-      int add_result = mjrpc_add_method(
-          handle, old_methods[i].func, old_methods[i].name, old_methods[i].arg);
-      g_mjrpc_free(old_methods[i].name);
+      // Store name pointer before passing ownership
+      char *name_copy = old_methods[i].name;
+      void *arg_copy = old_methods[i].arg;
+      mjrpc_func func_copy = old_methods[i].func;
+
+      int add_result = mjrpc_add_method(handle, func_copy, name_copy, arg_copy);
       if (add_result != MJRPC_RET_OK) {
-        // Failed to add method during resize, free the arg to prevent leak
-        g_mjrpc_free(old_methods[i].arg);
+        // Failed to add method during resize, free the resources
+        g_mjrpc_free(name_copy);
+        g_mjrpc_free(arg_copy);
+        // Continue with remaining methods instead of aborting
+        continue;
       }
-      // Note: old_methods[i].arg is now owned by the new method entry in the
-      // new table (if add succeeded)
+      // name_copy and arg_copy now owned by new entry, don't free them
     }
   }
   g_mjrpc_free(old_methods);
@@ -97,7 +119,11 @@ static int resize(mjrpc_handle_t *handle) {
 
 static bool method_get(const mjrpc_handle_t *handle, const char *key,
                        mjrpc_func *func, void **arg) {
-  unsigned int index = hash(key, handle->capacity);
+  if (handle == NULL || key == NULL || func == NULL || arg == NULL) {
+    return false;
+  }
+
+  size_t index = hash(key, handle->capacity);
   size_t probe_count = 0;
 
   while (handle->methods[index].state != EMPTY &&
@@ -109,6 +135,7 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
       return true;
     }
     probe_count++;
+    // Use quadratic probing: index = (index + probe^2) % capacity
     index = (index + probe_count * probe_count) % handle->capacity;
   }
   return false;
@@ -247,6 +274,8 @@ char *mjrpc_request_str(const char *method, cJSON *params, cJSON *id) {
   char *json_str = cJSON_PrintUnformatted(json);
   cJSON_Delete(json);
 
+  // Note: json_str must be freed by caller using standard free()
+  // (cJSON uses malloc internally)
   return json_str;
 }
 
@@ -301,8 +330,6 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id) {
   return result_root;
 }
 
-#define DEFAULT_INITIAL_CAPACITY 16
-
 mjrpc_handle_t *mjrpc_create_handle(size_t initial_capacity) {
   init_memory_hooks_if_needed();
   if (initial_capacity == 0)
@@ -346,23 +373,36 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
   if (function_pointer == NULL || method_name == NULL)
     return MJRPC_RET_ERROR_INVALID_PARAM;
 
-  if ((double)handle->size / (double)handle->capacity >= HASH_LOAD_FACTOR)
-    if (resize(handle) != MJRPC_RET_OK)
-      return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
+  // Check load factor and resize if needed
+  if ((double)handle->size / (double)handle->capacity >= HASH_LOAD_FACTOR) {
+    int resize_result = resize(handle);
+    if (resize_result != MJRPC_RET_OK)
+      return resize_result;
+  }
 
-  unsigned int index = hash(method_name, handle->capacity);
+  size_t index = hash(method_name, handle->capacity);
   size_t probe_count = 0;
 
   while (handle->methods[index].state != EMPTY &&
          handle->methods[index].state != DELETED &&
          probe_count < handle->capacity) {
     if (strcmp(handle->methods[index].name, method_name) == 0) {
+      // Method already exists, update it and free old arg if exists
+      if (handle->methods[index].arg != NULL) {
+        g_mjrpc_free(handle->methods[index].arg);
+      }
       handle->methods[index].func = function_pointer;
       handle->methods[index].arg = arg2func;
       return MJRPC_RET_OK;
     }
     probe_count++;
     index = (index + probe_count * probe_count) % handle->capacity;
+  }
+
+  // Check if hash table is full (shouldn't happen with resize, but safety
+  // check)
+  if (probe_count >= handle->capacity) {
+    return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
 
   handle->methods[index].name = g_mjrpc_strdup(method_name);
@@ -382,7 +422,8 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
     return MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED;
   if (name == NULL)
     return MJRPC_RET_ERROR_INVALID_PARAM;
-  unsigned int index = hash(name, handle->capacity);
+
+  size_t index = hash(name, handle->capacity);
   size_t probe_count = 0;
 
   while (handle->methods[index].state != EMPTY &&
@@ -390,8 +431,11 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
     if (handle->methods[index].state == OCCUPIED &&
         strcmp(handle->methods[index].name, name) == 0) {
       g_mjrpc_free(handle->methods[index].name);
-      if (handle->methods[index].arg != NULL)
+      handle->methods[index].name = NULL;
+      if (handle->methods[index].arg != NULL) {
         g_mjrpc_free(handle->methods[index].arg);
+        handle->methods[index].arg = NULL;
+      }
       handle->methods[index].state = DELETED;
       handle->size--;
       return MJRPC_RET_OK;
@@ -428,8 +472,27 @@ int mjrpc_enum_methods(const mjrpc_handle_t *handle,
 char *mjrpc_process_str(const mjrpc_handle_t *handle, const char *request_str,
                         int *ret_code) {
   cJSON *request = cJSON_Parse(request_str);
+  if (request == NULL) {
+    // Parse failed, create error response
+    if (ret_code) {
+      *ret_code = MJRPC_RET_ERROR_PARSE_FAILED;
+    }
+    cJSON *error_resp = mjrpc_response_error(
+        JSON_RPC_CODE_PARSE_ERROR,
+        g_mjrpc_strdup(
+            "Invalid request received: Not a JSON formatted request."),
+        cJSON_CreateNull());
+    if (error_resp) {
+      char *response_str = cJSON_PrintUnformatted(error_resp);
+      cJSON_Delete(error_resp);
+      return response_str;
+    }
+    return NULL;
+  }
+
   cJSON *response = mjrpc_process_cjson(handle, request, ret_code);
   cJSON_Delete(request);
+
   if (response) {
     char *response_str = cJSON_PrintUnformatted(response);
     cJSON_Delete(response);
