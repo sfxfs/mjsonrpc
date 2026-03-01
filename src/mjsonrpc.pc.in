@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: mjsonrpc
+Description: A lightweight JSON-RPC 2.0 message parser and generator based on cJSON
+Version: @MJSONRPC_VERSION@
+Requires:
+Libs: -L${libdir} -lmjsonrpc
+Cflags: -I${includedir}
