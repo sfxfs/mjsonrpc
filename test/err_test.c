@@ -7,7 +7,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-// 测试自定义错误码和 message
+/* Test custom error code and message */
 static cJSON* error_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
     ctx->error_code = -32001;
@@ -34,7 +34,7 @@ void test_custom_error(void)
     mjrpc_destroy_handle(h);
 }
 
-// 测试无 id 错误
+/* Test no id error */
 void test_no_id_error(void)
 {
     mjrpc_handle_t* h = mjrpc_create_handle(8);
@@ -42,14 +42,14 @@ void test_no_id_error(void)
     cJSON* req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "jsonrpc", "2.0");
     cJSON_AddStringToObject(req, "method", "err");
-    // 没有 id
+    /* No id */
     int code = -1;
     cJSON* resp = mjrpc_process_cjson(h, req, &code);
     TEST_ASSERT_NULL(resp);
     mjrpc_destroy_handle(h);
 }
 
-// 测试 process_str 解析失败
+/* Test process_str parse failure */
 void test_process_str_parse_fail(void)
 {
     mjrpc_handle_t* h = mjrpc_create_handle(8);

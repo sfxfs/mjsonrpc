@@ -7,7 +7,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-// 简单加法方法
+/* Simple addition method */
 static cJSON* add_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
     int a = 0, b = 0;
@@ -24,7 +24,7 @@ static cJSON* add_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
     return cJSON_CreateNumber(a + b);
 }
 
-// 批量请求正常
+/* Batch request normal */
 void test_batch_request_normal(void)
 {
     mjrpc_handle_t* h = mjrpc_create_handle(8);
@@ -53,18 +53,18 @@ void test_batch_request_normal(void)
     mjrpc_destroy_handle(h);
 }
 
-// 批量请求部分错误
+/* Batch request partial error */
 void test_batch_request_partial_error(void)
 {
     mjrpc_handle_t* h = mjrpc_create_handle(8);
     mjrpc_add_method(h, add_func, "add", NULL);
     cJSON* arr = cJSON_CreateArray();
-    // 正常
+    /* Normal request */
     cJSON* req1 =
         mjrpc_request_cjson("add", cJSON_CreateIntArray((int[]) {1, 2}, 2), cJSON_CreateNumber(1));
-    // 错误方法
+    /* Error - method not found */
     cJSON* req2 = mjrpc_request_cjson("no_such", NULL, cJSON_CreateNumber(2));
-    // 正常
+    /* Normal request */
     cJSON* req3 =
         mjrpc_request_cjson("add", cJSON_CreateIntArray((int[]) {3, 4}, 2), cJSON_CreateNumber(3));
     cJSON_AddItemToArray(arr, req1);
@@ -75,7 +75,7 @@ void test_batch_request_partial_error(void)
     TEST_ASSERT_NOT_NULL(resp);
     TEST_ASSERT_TRUE(cJSON_IsArray(resp));
     TEST_ASSERT_EQUAL_INT(3, cJSON_GetArraySize(resp));
-    // 检查第2项为 error
+    /* Check item 2 is error */
     cJSON* item2 = cJSON_GetArrayItem(resp, 1);
     cJSON* error = cJSON_GetObjectItem(item2, "error");
     TEST_ASSERT_NOT_NULL(error);
@@ -85,7 +85,7 @@ void test_batch_request_partial_error(void)
     mjrpc_destroy_handle(h);
 }
 
-// 空数组请求
+/* Batch request empty array */
 void test_batch_request_empty_array(void)
 {
     mjrpc_handle_t* h = mjrpc_create_handle(8);

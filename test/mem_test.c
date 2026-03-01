@@ -4,12 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Memory tracking for hook tests
+/* Memory tracking for hook tests */
 static uint32_t custom_malloc_count = 0;
 static uint32_t custom_free_count = 0;
 static uint32_t custom_strdup_count = 0;
 
-// Custom memory functions for testing hooks
+/* Custom memory functions for testing hooks */
 static void* test_malloc(size_t size)
 {
     custom_malloc_count++;
@@ -43,33 +43,33 @@ static char* test_strdup(const char* str)
 
 void setUp(void)
 {
-    // Reset memory counters before each test
+    /* Reset memory counters before each test */
     custom_malloc_count = 0;
     custom_free_count = 0;
     custom_strdup_count = 0;
-    // Reset to default memory functions
+    /* Reset to default memory functions */
     mjrpc_set_memory_hooks(NULL, NULL, NULL);
 }
 
 void tearDown(void)
 {
-    // Ensure we reset to default memory functions after each test
+    /* Ensure we reset to default memory functions after each test */
     mjrpc_set_memory_hooks(NULL, NULL, NULL);
 }
 
-// 用于测试自动扩容的空方法
+/* Dummy method for testing automatic resize */
 static cJSON* dummy_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
     return cJSON_CreateString("ok");
 }
 
-// 用于测试内存hooks的方法
+/* Method for testing memory hooks */
 static cJSON* memory_test_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
     (void) ctx;
     (void) id;
 
-    // 创建一个包含字符串的响应，这会触发内存分配
+    /* Create a response with string, which triggers memory allocation */
     cJSON* result = cJSON_CreateObject();
     cJSON_AddStringToObject(result, "message", "memory test successful");
     cJSON_AddNumberToObject(result, "malloc_count", custom_malloc_count);
@@ -83,7 +83,7 @@ void test_auto_resize(void)
 {
     size_t initial_capacity = 4;
     mjrpc_handle_t* h = mjrpc_create_handle(initial_capacity);
-    // 注册比初始容量多的方法，触发扩容
+    /* Register more methods than initial capacity, triggering resize */
     int method_count = 20;
     char name[32];
     for (int i = 0; i < method_count; ++i)
@@ -92,7 +92,7 @@ void test_auto_resize(void)
         int ret = mjrpc_add_method(h, dummy_func, name, NULL);
         TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
     }
-    // 检查所有方法都能被正确调用
+    /* Verify all methods can be called correctly */
     for (int i = 0; i < method_count; ++i)
     {
         snprintf(name, sizeof(name), "m%d", i);
@@ -111,18 +111,18 @@ void test_auto_resize(void)
 
 void test_memory_hooks_set_and_reset(void)
 {
-    // 测试设置自定义内存hooks
+    /* Test setting custom memory hooks */
     int ret = mjrpc_set_memory_hooks(test_malloc, test_free, test_strdup);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
 
-    // 测试重置为默认内存函数
+    /* Test resetting to default memory functions */
     ret = mjrpc_set_memory_hooks(NULL, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
 }
 
 void test_memory_hooks_invalid_params(void)
 {
-    // 测试无效参数组合 - 只设置部分函数应该失败
+    /* Test invalid parameter combination - setting partial functions should fail */
     int ret = mjrpc_set_memory_hooks(test_malloc, NULL, NULL);
     TEST_ASSERT_NOT_EQUAL(MJRPC_RET_OK, ret);
 
@@ -138,26 +138,26 @@ void test_memory_hooks_invalid_params(void)
 
 void test_memory_hooks_functionality(void)
 {
-    // 设置自定义内存hooks
+    /* Set custom memory hooks */
     int ret = mjrpc_set_memory_hooks(test_malloc, test_free, test_strdup);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
 
-    // 创建handle - 这应该会触发内存分配
+    /* Create handle - this should trigger memory allocation */
     size_t malloc_before = custom_malloc_count;
     size_t strdup_before = custom_strdup_count;
 
     mjrpc_handle_t* h = mjrpc_create_handle(4);
     TEST_ASSERT_NOT_NULL(h);
 
-    // 验证创建handle时使用了自定义内存函数
+    /* Verify custom memory functions were used when creating handle */
     TEST_ASSERT_GREATER_THAN(malloc_before, custom_malloc_count);
 
-    // 添加方法 - 这应该会触发strdup
+    /* Add method - this should trigger strdup */
     ret = mjrpc_add_method(h, memory_test_func, "memory_test", NULL);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
     TEST_ASSERT_GREATER_THAN(strdup_before, custom_strdup_count);
 
-    // 处理请求 - 验证hooks正常工作
+    /* Process request - verify hooks work correctly */
     cJSON* id = cJSON_CreateNumber(1);
     cJSON* req = mjrpc_request_cjson("memory_test", NULL, id);
     TEST_ASSERT_NOT_NULL(req);
@@ -167,7 +167,7 @@ void test_memory_hooks_functionality(void)
     TEST_ASSERT_NOT_NULL(resp);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, code);
 
-    // 验证响应内容
+    /* Verify response content */
     cJSON* result = cJSON_GetObjectItem(resp, "result");
     TEST_ASSERT_NOT_NULL(result);
     TEST_ASSERT_TRUE(cJSON_IsObject(result));
@@ -178,23 +178,23 @@ void test_memory_hooks_functionality(void)
 
     cJSON_Delete(resp);
 
-    // 记录销毁前的free计数
+    /* Record free count before destroy */
     size_t free_before = custom_free_count;
 
-    // 销毁handle - 这应该会触发内存释放
+    /* Destroy handle - this should trigger memory deallocation */
     mjrpc_destroy_handle(h);
 
-    // 验证销毁时使用了自定义free函数
+    /* Verify custom free function was used during destroy */
     TEST_ASSERT_GREATER_THAN(free_before, custom_free_count);
 }
 
 void test_memory_hooks_multiple_operations(void)
 {
-    // 设置自定义内存hooks
+    /* Set custom memory hooks */
     int ret = mjrpc_set_memory_hooks(test_malloc, test_free, test_strdup);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
 
-    // 重置计数器
+    /* Reset counters */
     custom_malloc_count = 0;
     custom_free_count = 0;
     custom_strdup_count = 0;
@@ -202,10 +202,10 @@ void test_memory_hooks_multiple_operations(void)
     mjrpc_handle_t* h = mjrpc_create_handle(2);
     TEST_ASSERT_NOT_NULL(h);
 
-    // 记录添加方法前的strdup计数
+    /* Record strdup count before adding methods */
     size_t strdup_before = custom_strdup_count;
 
-    // 添加多个方法来测试strdup的使用
+    /* Add multiple methods to test strdup usage */
     char method_names[3][20] = {"test1", "test2", "test3"};
     for (int i = 0; i < 3; i++)
     {
@@ -213,10 +213,10 @@ void test_memory_hooks_multiple_operations(void)
         TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
     }
 
-    // 验证至少有3次strdup调用（可能因为内部实现有额外的strdup调用）
+    /* Verify at least 3 strdup calls (may have extra due to internal implementation) */
     TEST_ASSERT_GREATER_OR_EQUAL_size_t(3, custom_strdup_count - strdup_before);
 
-    // 处理多个请求
+    /* Process multiple requests */
     for (int i = 0; i < 3; i++)
     {
         cJSON* id = cJSON_CreateNumber(i);
@@ -230,12 +230,12 @@ void test_memory_hooks_multiple_operations(void)
         cJSON_Delete(resp);
     }
 
-    // 验证malloc和free被调用
+    /* Verify malloc and free were called */
     TEST_ASSERT_GREATER_THAN_size_t(0, custom_malloc_count);
 
     mjrpc_destroy_handle(h);
 
-    // 验证free被调用用于清理
+    /* Verify free was called for cleanup */
     TEST_ASSERT_GREATER_THAN_size_t(0, custom_free_count);
 }
 
