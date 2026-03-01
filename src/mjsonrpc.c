@@ -27,15 +27,25 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /*--- memory management hooks ---*/
 
-// Thread-local storage for memory function pointers, default to standard
-// library functions
+/* Thread-local storage for memory function pointers, default to standard
+ * library functions */
 static _Thread_local mjrpc_malloc_func g_mjrpc_malloc = NULL;
 static _Thread_local mjrpc_free_func g_mjrpc_free = NULL;
 static _Thread_local mjrpc_strdup_func g_mjrpc_strdup = NULL;
 
+/*--- error logging hooks ---*/
+
+/* Thread-local storage for error logging function pointer */
+static _Thread_local mjrpc_error_log_func g_mjrpc_error_log = NULL;
+
+/**
+ * @brief Initialize memory and error logging hooks if not yet initialized
+ * @internal
+ */
 static inline void init_memory_hooks_if_needed(void) {
   if (g_mjrpc_malloc == NULL)
     g_mjrpc_malloc = malloc;
@@ -43,6 +53,18 @@ static inline void init_memory_hooks_if_needed(void) {
     g_mjrpc_free = free;
   if (g_mjrpc_strdup == NULL)
     g_mjrpc_strdup = strdup;
+}
+
+/**
+ * @brief Log an error message if error logging is enabled
+ * @param message Error message to log
+ * @param error_code Optional error code (pass 0 if not applicable)
+ * @internal
+ */
+static inline void log_error(const char *message, int error_code) {
+  if (g_mjrpc_error_log != NULL) {
+    g_mjrpc_error_log(message, error_code);
+  }
 }
 
 /*--- utility ---*/
@@ -55,32 +77,60 @@ enum method_state { EMPTY, OCCUPIED, DELETED };
 /** @brief Default hash table initial capacity */
 #define DEFAULT_INITIAL_CAPACITY 16
 
-/** @brief Hash multiplier for string hashing */
-#define HASH_MULTIPLIER 31
+/** @brief Hash multiplier for string hashing (djb2 algorithm) */
+#define HASH_MULTIPLIER 33
+
+/** @brief Second hash multiplier for double hashing */
+#define HASH_MULTIPLIER2 17
 
 /**
- * @brief Compute hash value for a string key
+ * @brief Compute hash value for a string key using djb2 algorithm
  * @param key String key to hash (must not be NULL for valid hash)
  * @param capacity Hash table capacity
  * @return Hash value modulo capacity
+ *
+ * @note Uses djb2 algorithm: hash = hash * 33 + char
+ *       This provides better distribution than simple multiplication
  */
 static size_t hash(const char *key, size_t capacity) {
   if (key == NULL)
     return 0;
-  size_t hash_value = 0;
+  size_t hash_value = 5381;  /* Initial hash value (prime) */
   while (*key) {
-    hash_value = (hash_value * HASH_MULTIPLIER) + (unsigned char)(*key++);
+    hash_value = ((hash_value << 5) + hash_value) + (unsigned char)(*key++);
   }
   return hash_value % capacity;
+}
+
+/**
+ * @brief Compute second hash value for double hashing
+ * @param key String key to hash
+ * @param capacity Hash table capacity
+ * @return Second hash value for probe step size
+ *
+ * @note Returns a prime-based hash for use as step size in double hashing
+ *       Ensures step size is relatively prime to table capacity
+ */
+static size_t hash2(const char *key, size_t capacity) {
+  if (key == NULL)
+    return 1;  /* Minimum step size */
+  size_t hash_value = 0;
+  while (*key) {
+    hash_value = (hash_value * HASH_MULTIPLIER2) + (unsigned char)(*key++);
+  }
+  /* Return value in range [1, capacity-1] to ensure valid probe step */
+  return 1 + (hash_value % (capacity - 1));
 }
 
 static int resize(mjrpc_handle_t *handle) {
   init_memory_hooks_if_needed();
   const size_t old_capacity = handle->capacity;
   struct mjrpc_method *old_methods = handle->methods;
+  int rehash_failures = 0;
 
-  // Check for potential overflow
+  /* Check for potential overflow */
   if (old_capacity > SIZE_MAX / 2) {
+    log_error("Hash table resize overflow", 0);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
 
@@ -90,6 +140,7 @@ static int resize(mjrpc_handle_t *handle) {
   if (handle->methods == NULL) {
     handle->capacity = old_capacity;
     handle->methods = old_methods;
+    log_error("Hash table resize memory allocation failed", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
   memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
@@ -97,23 +148,29 @@ static int resize(mjrpc_handle_t *handle) {
 
   for (size_t i = 0; i < old_capacity; i++) {
     if (old_methods[i].state == OCCUPIED) {
-      // Store name pointer before passing ownership
+      /* Store name pointer before passing ownership */
       char *name_copy = old_methods[i].name;
       void *arg_copy = old_methods[i].arg;
       mjrpc_func func_copy = old_methods[i].func;
 
       int add_result = mjrpc_add_method(handle, func_copy, name_copy, arg_copy);
       if (add_result != MJRPC_RET_OK) {
-        // Failed to add method during resize, free the resources
+        /* Failed to add method during resize, free the resources */
         g_mjrpc_free(name_copy);
         g_mjrpc_free(arg_copy);
-        // Continue with remaining methods instead of aborting
+        rehash_failures++;
+        log_error("Method rehash failed during resize", add_result);
+        /* Continue with remaining methods instead of aborting */
         continue;
       }
-      // name_copy and arg_copy now owned by new entry, don't free them
+      /* name_copy and arg_copy now owned by new entry, don't free them */
     }
   }
   g_mjrpc_free(old_methods);
+
+  if (rehash_failures > 0) {
+    log_error("Hash table resize completed with method failures", rehash_failures);
+  }
   return MJRPC_RET_OK;
 }
 
@@ -124,10 +181,11 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
   }
 
   size_t index = hash(key, handle->capacity);
+  size_t step_size = 0;
   size_t probe_count = 0;
 
-  while (handle->methods[index].state != EMPTY &&
-         probe_count < handle->capacity) {
+  /* Use double hashing for better distribution with high load factors */
+  while (handle->methods[index].state != EMPTY) {
     if (handle->methods[index].state == OCCUPIED &&
         strcmp(handle->methods[index].name, key) == 0) {
       *func = handle->methods[index].func;
@@ -135,8 +193,14 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
       return true;
     }
     probe_count++;
-    // Use quadratic probing: index = (index + probe^2) % capacity
-    index = (index + probe_count * probe_count) % handle->capacity;
+    if (probe_count >= handle->capacity) {
+      break;  /* Table is full, key not found */
+    }
+    /* Double hashing: index = (hash1 + i * hash2) % capacity */
+    if (step_size == 0) {
+      step_size = hash2(key, handle->capacity);  /* Compute step size on first probe */
+    }
+    index = (index + step_size) % handle->capacity;
   }
   return false;
 }
@@ -373,7 +437,7 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
   if (function_pointer == NULL || method_name == NULL)
     return MJRPC_RET_ERROR_INVALID_PARAM;
 
-  // Check load factor and resize if needed
+  /* Check load factor and resize if needed */
   if ((double)handle->size / (double)handle->capacity >= HASH_LOAD_FACTOR) {
     int resize_result = resize(handle);
     if (resize_result != MJRPC_RET_OK)
@@ -381,13 +445,14 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
   }
 
   size_t index = hash(method_name, handle->capacity);
+  size_t step_size = 0;
   size_t probe_count = 0;
 
+  /* Use double hashing for better distribution with high load factors */
   while (handle->methods[index].state != EMPTY &&
-         handle->methods[index].state != DELETED &&
-         probe_count < handle->capacity) {
+         handle->methods[index].state != DELETED) {
     if (strcmp(handle->methods[index].name, method_name) == 0) {
-      // Method already exists, update it and free old arg if exists
+      /* Method already exists, update it and free old arg if exists */
       if (handle->methods[index].arg != NULL) {
         g_mjrpc_free(handle->methods[index].arg);
       }
@@ -396,17 +461,25 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
       return MJRPC_RET_OK;
     }
     probe_count++;
-    index = (index + probe_count * probe_count) % handle->capacity;
+    if (probe_count >= handle->capacity) {
+      break;  /* Table is full, should not happen with resize */
+    }
+    /* Double hashing: index = (hash1 + i * hash2) % capacity */
+    if (step_size == 0) {
+      step_size = hash2(method_name, handle->capacity);  /* Compute step size on first probe */
+    }
+    index = (index + step_size) % handle->capacity;
   }
 
-  // Check if hash table is full (shouldn't happen with resize, but safety
-  // check)
+  /* Check if hash table is full (shouldn't happen with resize, but safety check) */
   if (probe_count >= handle->capacity) {
+    log_error("Hash table full during add_method (should not happen)", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
 
   handle->methods[index].name = g_mjrpc_strdup(method_name);
   if (handle->methods[index].name == NULL) {
+    log_error("strdup failed during add_method", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
   handle->methods[index].func = function_pointer;
@@ -424,10 +497,11 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
     return MJRPC_RET_ERROR_INVALID_PARAM;
 
   size_t index = hash(name, handle->capacity);
+  size_t step_size = 0;
   size_t probe_count = 0;
 
-  while (handle->methods[index].state != EMPTY &&
-         probe_count < handle->capacity) {
+  /* Use double hashing for better distribution with high load factors */
+  while (handle->methods[index].state != EMPTY) {
     if (handle->methods[index].state == OCCUPIED &&
         strcmp(handle->methods[index].name, name) == 0) {
       g_mjrpc_free(handle->methods[index].name);
@@ -441,7 +515,14 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
       return MJRPC_RET_OK;
     }
     probe_count++;
-    index = (index + probe_count * probe_count) % handle->capacity;
+    if (probe_count >= handle->capacity) {
+      break;  /* Table is full, key not found */
+    }
+    /* Double hashing: index = (hash1 + i * hash2) % capacity */
+    if (step_size == 0) {
+      step_size = hash2(name, handle->capacity);  /* Compute step size on first probe */
+    }
+    index = (index + step_size) % handle->capacity;
   }
   return MJRPC_RET_ERROR_NOT_FOUND;
 }
@@ -570,10 +651,10 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
 int mjrpc_set_memory_hooks(mjrpc_malloc_func malloc_func,
                            mjrpc_free_func free_func,
                            mjrpc_strdup_func strdup_func) {
-  // Initialize defaults if not yet initialized
+  /* Initialize defaults if not yet initialized */
   init_memory_hooks_if_needed();
 
-  // If all parameters are NULL, reset to default functions
+  /* If all parameters are NULL, reset to default functions */
   if (malloc_func == NULL && free_func == NULL && strdup_func == NULL) {
     g_mjrpc_malloc = malloc;
     g_mjrpc_free = free;
@@ -581,15 +662,20 @@ int mjrpc_set_memory_hooks(mjrpc_malloc_func malloc_func,
     return MJRPC_RET_OK;
   }
 
-  // If any parameter is not NULL, all must be provided
+  /* If any parameter is not NULL, all must be provided */
   if (malloc_func == NULL || free_func == NULL || strdup_func == NULL) {
     return MJRPC_RET_ERROR_INVALID_PARAM;
   }
 
-  // Set custom functions
+  /* Set custom functions */
   g_mjrpc_malloc = malloc_func;
   g_mjrpc_free = free_func;
   g_mjrpc_strdup = strdup_func;
 
+  return MJRPC_RET_OK;
+}
+
+int mjrpc_set_error_log_hook(mjrpc_error_log_func error_log_func) {
+  g_mjrpc_error_log = error_log_func;
   return MJRPC_RET_OK;
 }
