@@ -227,6 +227,17 @@ typedef void (*mjrpc_free_func)(void *ptr);
 typedef char *(*mjrpc_strdup_func)(const char *str);
 
 /**
+ * @typedef mjrpc_error_log_func
+ * @brief Function pointer type for error logging callback
+ *
+ * @param message Error message string
+ * @param error_code Optional error code (0 if not applicable)
+ *
+ * @note Can be used to integrate with application logging systems
+ */
+typedef void (*mjrpc_error_log_func)(const char *message, int error_code);
+
+/**
  * @brief Set custom memory management functions
  *
  * This function allows users to override the default memory management
@@ -262,6 +273,36 @@ typedef char *(*mjrpc_strdup_func)(const char *str);
 int mjrpc_set_memory_hooks(mjrpc_malloc_func malloc_func,
                            mjrpc_free_func free_func,
                            mjrpc_strdup_func strdup_func);
+
+/**
+ * @brief Set custom error logging function
+ *
+ * This function allows users to set a callback function that will be called
+ * when errors occur within the mjsonrpc library. This enables integration
+ * with application logging systems for debugging and monitoring.
+ *
+ * @param error_log_func Custom error logging callback function
+ *
+ * @note Pass NULL to disable error logging (default behavior)
+ * @note The callback will be invoked for critical errors such as:
+ *       - Memory allocation failures
+ *       - Hash table resize issues
+ *       - Method rehash failures
+ *
+ * @par Example:
+ * @code
+ * void my_error_logger(const char *msg, int code) {
+ *     fprintf(stderr, "[MJSONRPC ERROR] %s (code: %d)\n", msg, code);
+ * }
+ *
+ * // Enable error logging
+ * mjrpc_set_error_log_hook(my_error_logger);
+ *
+ * // Disable error logging
+ * mjrpc_set_error_log_hook(NULL);
+ * @endcode
+ */
+int mjrpc_set_error_log_hook(mjrpc_error_log_func error_log_func);
 
 /** @} */
 
