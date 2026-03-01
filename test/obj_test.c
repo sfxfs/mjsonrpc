@@ -7,7 +7,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-// 测试对象参数的字段累加
+/* Test object parameter field summation */
 static cJSON* sum_obj_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
     int a = 0, b = 0;
@@ -39,7 +39,7 @@ void test_sum_obj(void)
     mjrpc_destroy_handle(h);
 }
 
-// 测试嵌套对象参数
+/* Test nested object parameters */
 static cJSON* nested_obj_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
 {
     cJSON* inner = cJSON_GetObjectItem(params, "inner");
@@ -77,17 +77,17 @@ void test_nested_obj(void)
 void test_del_method(void)
 {
     mjrpc_handle_t* h = mjrpc_create_handle(8);
-    // 添加并删除
+    /* Add and delete */
     mjrpc_add_method(h, sum_obj_func, "sum_obj", NULL);
     int ret = mjrpc_del_method(h, "sum_obj");
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
-    // 再次删除应返回 NOT_FOUND
+    /* Deleting again should return NOT_FOUND */
     ret = mjrpc_del_method(h, "sum_obj");
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_NOT_FOUND, ret);
-    // 删除不存在的方法
+    /* Delete non-existent method */
     ret = mjrpc_del_method(h, "no_such");
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_NOT_FOUND, ret);
-    // 删除空方法名
+    /* Delete empty method name */
     ret = mjrpc_del_method(h, NULL);
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_INVALID_PARAM, ret);
     mjrpc_destroy_handle(h);
