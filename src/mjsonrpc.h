@@ -469,6 +469,7 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id);
  * @retval NULL If memory allocation failed
  *
  * @note If initial_capacity is 0, a default capacity will be used
+ * @note The actual capacity is rounded up to the nearest power of two
  * @note The handle must be destroyed with mjrpc_destroy_handle() to prevent
  * memory leaks
  *

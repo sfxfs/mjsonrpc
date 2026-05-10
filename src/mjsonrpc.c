@@ -83,6 +83,28 @@ enum method_state { EMPTY, OCCUPIED, DELETED };
 #define HASH_MULTIPLIER2 17
 
 /**
+ * @brief Round a size_t up to the next power of two
+ * @param n Value to round up (0 returns 1)
+ * @return Next power of two >= n
+ * @internal
+ */
+static size_t next_power_of_2(size_t n) {
+  if (n == 0)
+    return 1;
+  n--;
+  n |= n >> 1;
+  n |= n >> 2;
+  n |= n >> 4;
+  n |= n >> 8;
+  n |= n >> 16;
+#if SIZE_MAX > 0xFFFFFFFF
+  n |= n >> 32;
+#endif
+  n++;
+  return n;
+}
+
+/**
  * @brief Compute hash value for a string key using djb2 algorithm
  * @param key String key to hash (must not be NULL for valid hash)
  * @param capacity Hash table capacity
@@ -104,11 +126,12 @@ static size_t hash(const char *key, size_t capacity) {
 /**
  * @brief Compute second hash value for double hashing
  * @param key String key to hash
- * @param capacity Hash table capacity
- * @return Second hash value for probe step size
+ * @param capacity Hash table capacity (must be a power of two)
+ * @return Second hash value for probe step size in range [1, capacity-1]
  *
- * @note Returns a prime-based hash for use as step size in double hashing
- *       Ensures step size is relatively prime to table capacity
+ * @note The returned step is forced to be odd. An odd step is always
+ *       coprime with a power-of-two capacity, guaranteeing the probe
+ *       sequence visits every slot before repeating.
  */
 static size_t hash2(const char *key, size_t capacity) {
   if (key == NULL || capacity <= 1)
@@ -117,10 +140,15 @@ static size_t hash2(const char *key, size_t capacity) {
   while (*key) {
     hash_value = (hash_value * HASH_MULTIPLIER2) + (unsigned char)(*key++);
   }
-  /* Return odd value in range [1, capacity-1] to ensure valid probe step.
-   * Odd step guarantees coprimality with power-of-2 capacity. */
+  /* Step in [1, capacity-1]; force odd so it is coprime with any
+   * power-of-two capacity.  With power-of-two cap, this always yields
+   * step <= capacity - 1. */
   size_t step = 1 + (hash_value % (capacity - 1));
-  return (step % 2 == 0) ? step + 1 : step;
+  if (step % 2 == 0)
+    step++;  /* make odd */
+  if (step >= capacity)
+    step = 1;  /* defensive cap */
+  return step;
 }
 
 static int resize(mjrpc_handle_t *handle) {
@@ -414,6 +442,7 @@ mjrpc_handle_t *mjrpc_create_handle(size_t initial_capacity) {
   init_memory_hooks_if_needed();
   if (initial_capacity == 0)
     initial_capacity = DEFAULT_INITIAL_CAPACITY;
+  initial_capacity = next_power_of_2(initial_capacity);
   mjrpc_handle_t *handle = g_mjrpc_malloc(sizeof(mjrpc_handle_t));
   if (handle == NULL)
     return NULL;
