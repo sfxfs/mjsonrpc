@@ -246,6 +246,10 @@ static cJSON *invoke_callback(const mjrpc_handle_t *handle,
     g_mjrpc_free(ctx.error_message);
     return err_resp;
   }
+  if (ctx.error_data) {
+    cJSON_Delete(ctx.error_data);
+  }
+  g_mjrpc_free(ctx.error_message);
   return mjrpc_response_ok(returned, id);
 }
 
