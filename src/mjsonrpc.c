@@ -234,7 +234,9 @@ static cJSON *invoke_callback(const mjrpc_handle_t *handle,
     if (err_resp && ctx.error_data) {
       cJSON *error = cJSON_GetObjectItem(err_resp, "error");
       if (error) {
-        cJSON_AddItemToObject(error, "data", ctx.error_data);
+        if (!cJSON_AddItemToObject(error, "data", ctx.error_data)) {
+          cJSON_Delete(ctx.error_data);
+        }
       } else {
         cJSON_Delete(ctx.error_data);
       }
