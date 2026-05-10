@@ -95,6 +95,28 @@ static cJSON* ok_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
     return cJSON_CreateString("ok");
 }
 
+/* Enumeration counter */
+static int enum_count = 0;
+static void enum_callback(const char* name, void* arg, void* user_data)
+{
+    (void)arg;
+    (void)user_data;
+    (void)name;
+    enum_count++;
+}
+
+/* Callback that sets error_data */
+static cJSON* error_with_data_func(mjrpc_func_ctx_t* ctx, cJSON* params, cJSON* id)
+{
+    (void)params;
+    (void)id;
+    ctx->error_code = -32001;
+    ctx->error_message = strdup("validation failed");
+    ctx->error_data = cJSON_CreateObject();
+    cJSON_AddStringToObject(ctx->error_data, "field", "age");
+    return NULL;
+}
+
 /* ================================================================== */
 /*  BUG-3 : Batch request where ALL items are notifications           */
 /*          Before fix, return_json_array was leaked.                  */
@@ -353,6 +375,70 @@ void test_hash1_add_delete_readd(void)
 }
 
 /* ================================================================== */
+/*  enum_methods coverage                                             */
+/* ================================================================== */
+
+void test_enum_methods_basic(void)
+{
+    mjrpc_handle_t* h = mjrpc_create_handle(8);
+    TEST_ASSERT_NOT_NULL(h);
+    mjrpc_add_method(h, ok_func, "alpha", NULL);
+    mjrpc_add_method(h, ok_func, "beta", NULL);
+
+    enum_count = 0;
+    int ret = mjrpc_enum_methods(h, enum_callback, NULL);
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_OK, ret);
+    TEST_ASSERT_EQUAL_INT(2, enum_count);
+
+    mjrpc_destroy_handle(h);
+}
+
+void test_enum_methods_null_handle(void)
+{
+    int ret = mjrpc_enum_methods(NULL, enum_callback, NULL);
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED, ret);
+}
+
+void test_enum_methods_null_callback(void)
+{
+    mjrpc_handle_t* h = mjrpc_create_handle(8);
+    int ret = mjrpc_enum_methods(h, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_INVALID_PARAM, ret);
+    mjrpc_destroy_handle(h);
+}
+
+/* ================================================================== */
+/*  error_data support                                                */
+/* ================================================================== */
+
+void test_error_data_in_response(void)
+{
+    mjrpc_handle_t* h = mjrpc_create_handle(8);
+    TEST_ASSERT_NOT_NULL(h);
+    mjrpc_add_method(h, error_with_data_func, "validate", NULL);
+
+    cJSON* id = cJSON_CreateNumber(1);
+    cJSON* req = mjrpc_request_cjson("validate", NULL, id);
+    int code = -1;
+    cJSON* resp = mjrpc_process_cjson(h, req, &code);
+    TEST_ASSERT_NOT_NULL(resp);
+
+    cJSON* error = cJSON_GetObjectItem(resp, "error");
+    TEST_ASSERT_NOT_NULL(error);
+
+    cJSON* data = cJSON_GetObjectItem(error, "data");
+    TEST_ASSERT_NOT_NULL(data);
+
+    cJSON* field = cJSON_GetObjectItem(data, "field");
+    TEST_ASSERT_NOT_NULL(field);
+    TEST_ASSERT_EQUAL_STRING("age", field->valuestring);
+
+    cJSON_Delete(req);
+    cJSON_Delete(resp);
+    mjrpc_destroy_handle(h);
+}
+
+/* ================================================================== */
 /*  main                                                              */
 /* ================================================================== */
 
@@ -378,6 +464,12 @@ int main(void)
     /* HASH-1 */
     RUN_TEST(test_hash1_probe_loop_terminates);
     RUN_TEST(test_hash1_add_delete_readd);
+
+    /* API coverage */
+    RUN_TEST(test_enum_methods_basic);
+    RUN_TEST(test_enum_methods_null_handle);
+    RUN_TEST(test_enum_methods_null_callback);
+    RUN_TEST(test_error_data_in_response);
 
     return UNITY_END();
 }

@@ -97,7 +97,7 @@ void test_batch_request_empty_array(void)
     TEST_ASSERT_NOT_NULL(error);
     cJSON* code_item = cJSON_GetObjectItem(error, "code");
     TEST_ASSERT_EQUAL_INT(MJRPC_RET_ERROR_EMPTY_REQUEST, code);
-    TEST_ASSERT_EQUAL_INT(JSON_RPC_CODE_PARSE_ERROR, code_item->valueint);
+    TEST_ASSERT_EQUAL_INT(JSON_RPC_CODE_INVALID_REQUEST, code_item->valueint);
     cJSON_Delete(resp);
     mjrpc_destroy_handle(h);
 }

@@ -27,7 +27,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 /*--- memory management hooks ---*/
 
@@ -112,14 +111,16 @@ static size_t hash(const char *key, size_t capacity) {
  *       Ensures step size is relatively prime to table capacity
  */
 static size_t hash2(const char *key, size_t capacity) {
-  if (key == NULL)
+  if (key == NULL || capacity <= 1)
     return 1;  /* Minimum step size */
   size_t hash_value = 0;
   while (*key) {
     hash_value = (hash_value * HASH_MULTIPLIER2) + (unsigned char)(*key++);
   }
-  /* Return value in range [1, capacity-1] to ensure valid probe step */
-  return 1 + (hash_value % (capacity - 1));
+  /* Return odd value in range [1, capacity-1] to ensure valid probe step.
+   * Odd step guarantees coprimality with power-of-2 capacity. */
+  size_t step = 1 + (hash_value % (capacity - 1));
+  return (step % 2 == 0) ? step + 1 : step;
 }
 
 static int resize(mjrpc_handle_t *handle) {
@@ -163,7 +164,9 @@ static int resize(mjrpc_handle_t *handle) {
         /* Continue with remaining methods instead of aborting */
         continue;
       }
-      /* name_copy and arg_copy now owned by new entry, don't free them */
+      /* mjrpc_add_method strdups the name, so free our copy.
+       * arg_copy is now owned by the new entry, do not free it. */
+      g_mjrpc_free(name_copy);
     }
   }
   g_mjrpc_free(old_methods);
@@ -217,17 +220,29 @@ static cJSON *invoke_callback(const mjrpc_handle_t *handle,
   mjrpc_func_ctx_t ctx = {0};
   ctx.error_code = 0;
   ctx.error_message = NULL;
+  ctx.error_data = NULL;
   ctx.params_type = params_type;
-  if (!method_get((mjrpc_handle_t *)handle, method_name, &func, &arg) ||
-      !func) {
+  if (!method_get(handle, method_name, &func, &arg) || !func) {
     return mjrpc_response_error(JSON_RPC_CODE_METHOD_NOT_FOUND,
-                                g_mjrpc_strdup("Method not found."), id);
+                                "Method not found.", id);
   }
   ctx.data = arg;
   returned = func(&ctx, params, id);
   if (ctx.error_code) {
     cJSON_Delete(returned);
-    return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    cJSON *err_resp = mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    if (err_resp && ctx.error_data) {
+      cJSON *error = cJSON_GetObjectItem(err_resp, "error");
+      if (error) {
+        cJSON_AddItemToObject(error, "data", ctx.error_data);
+      } else {
+        cJSON_Delete(ctx.error_data);
+      }
+    } else if (ctx.error_data) {
+      cJSON_Delete(ctx.error_data);
+    }
+    g_mjrpc_free(ctx.error_message);
+    return err_resp;
   }
   return mjrpc_response_ok(returned, id);
 }
@@ -259,7 +274,7 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
         strcmp("2.0", version->valuestring) != 0)
       return mjrpc_response_error(
           JSON_RPC_CODE_INVALID_REQUEST,
-          g_mjrpc_strdup("Invalid request received: JSONRPC version error."),
+          "Invalid request received: JSONRPC version error.",
           id_copy);
 
     const cJSON *method = cJSON_GetObjectItem(request, "method");
@@ -277,13 +292,13 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
     }
     return mjrpc_response_error(
         JSON_RPC_CODE_INVALID_REQUEST,
-        g_mjrpc_strdup("Invalid request received: No 'method' member."),
+        "Invalid request received: No 'method' member.",
         id_copy);
   }
   // Invalid id type
   return mjrpc_response_error(
       JSON_RPC_CODE_INVALID_REQUEST,
-      g_mjrpc_strdup("Invalid request received: 'id' member type error."),
+      "Invalid request received: 'id' member type error.",
       cJSON_CreateNull());
 }
 
@@ -370,9 +385,6 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id) {
   cJSON *result_root = cJSON_CreateObject();
   cJSON *error_root = cJSON_CreateObject();
   if (result_root == NULL || error_root == NULL || id == NULL) {
-    if (message)
-      g_mjrpc_free(
-          (void *)message); // Free the message string if it was allocated
     cJSON_Delete(id);
     cJSON_Delete(error_root);
     cJSON_Delete(result_root);
@@ -382,8 +394,6 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id) {
   cJSON_AddNumberToObject(error_root, "code", code);
   if (message) {
     cJSON_AddStringToObject(error_root, "message", message);
-    g_mjrpc_free(
-        (void *)message); // Free the message string after adding to JSON
   } else
     cJSON_AddStringToObject(error_root, "message", "No message here.");
 
@@ -560,8 +570,7 @@ char *mjrpc_process_str(const mjrpc_handle_t *handle, const char *request_str,
     }
     cJSON *error_resp = mjrpc_response_error(
         JSON_RPC_CODE_PARSE_ERROR,
-        g_mjrpc_strdup(
-            "Invalid request received: Not a JSON formatted request."),
+        "Invalid request received: Not a JSON formatted request.",
         cJSON_CreateNull());
     if (error_resp) {
       char *response_str = cJSON_PrintUnformatted(error_resp);
@@ -599,8 +608,7 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
       *ret_code = ret;
     return mjrpc_response_error(
         JSON_RPC_CODE_PARSE_ERROR,
-        g_mjrpc_strdup(
-            "Invalid request received: Not a JSON formatted request."),
+        "Invalid request received: Not a JSON formatted request.",
         cJSON_CreateNull());
   }
 
@@ -610,8 +618,8 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
     if (array_size <= 0) {
       ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
       cjson_return = mjrpc_response_error(
-          JSON_RPC_CODE_PARSE_ERROR,
-          g_mjrpc_strdup("Invalid request received: Empty JSON array."),
+          JSON_RPC_CODE_INVALID_REQUEST,
+          "Invalid request received: Empty JSON array.",
           cJSON_CreateNull());
     } else {
       cjson_return = rpc_handle_ary_req(handle, request_cjson, array_size);
@@ -621,13 +629,11 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
         ret = MJRPC_RET_OK_NOTIFICATION;
     }
   } else if (request_cjson->type == cJSON_Object) {
-    // Check if the object is empty by checking if it has any children
-    const int obj_size = (request_cjson->child != NULL) ? 1 : 0;
-    if (obj_size <= 0) {
+    if (request_cjson->child == NULL) {
       ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
       cjson_return = mjrpc_response_error(
-          JSON_RPC_CODE_PARSE_ERROR,
-          g_mjrpc_strdup("Invalid request received: Empty JSON object."),
+          JSON_RPC_CODE_INVALID_REQUEST,
+          "Invalid request received: Empty JSON object.",
           cJSON_CreateNull());
     } else {
       cjson_return = rpc_handle_obj_req(handle, request_cjson);
@@ -638,8 +644,8 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
     }
   } else {
     cjson_return = mjrpc_response_error(
-        JSON_RPC_CODE_PARSE_ERROR,
-        g_mjrpc_strdup("Invalid request received: Not a JSON object or array."),
+        JSON_RPC_CODE_INVALID_REQUEST,
+        "Invalid request received: Not a JSON object or array.",
         cJSON_CreateNull());
     ret = MJRPC_RET_ERROR_NOT_OBJ_ARY;
   }

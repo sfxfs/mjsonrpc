@@ -15,10 +15,15 @@ option(BUILD_STATIC_LIBRARY "Build static library" OFF)
 if(BUILD_STATIC_LIBRARY)
     add_library(${PROJECT_NAME}_static STATIC mjsonrpc.c)
     target_compile_definitions(${PROJECT_NAME}_static PRIVATE _DEFAULT_SOURCE)
+    target_include_directories(${PROJECT_NAME}_static
+        PUBLIC ${PROJECT_SOURCE_DIR}
+    )
+    target_link_libraries(${PROJECT_NAME}_static PUBLIC cJSON)
     set_target_properties(${PROJECT_NAME}_static PROPERTIES
         OUTPUT_NAME ${PROJECT_NAME}
         VERSION ${MJSONRPC_VERSION}
         SOVERSION ${MJSONRPC_VERSION_MAJOR}
+        PUBLIC_HEADER mjsonrpc.h
     )
 endif()
 
@@ -51,6 +56,7 @@ if(BUILD_STATIC_LIBRARY)
     install(TARGETS ${PROJECT_NAME}_static
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
 endif()
 

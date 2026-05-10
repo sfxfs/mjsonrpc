@@ -129,6 +129,10 @@ typedef struct {
    * automatically) */
   char *error_message;
 
+  /** @brief Optional structured error data to be included in the error response
+   * (will be freed automatically, can be NULL) */
+  cJSON *error_data;
+
   /** @brief Parameter type: 0=object, 1=array, 2=no params */
   int params_type;
 } mjrpc_func_ctx_t;
@@ -427,15 +431,17 @@ cJSON *mjrpc_response_ok(cJSON *result, cJSON *id);
  * @param id Client request ID (will be owned by response)
  *
  * @return cJSON pointer containing the error response (caller must delete)
- * @retval NULL If an error occurred (message and id will be released)
+ * @retval NULL If an error occurred (id will be released)
  *
  * @note If message is NULL, a default message will be used
+ * @note The message string is copied by cJSON; caller retains ownership.
  *
  * @par Example:
  * @code
  * cJSON *id = cJSON_CreateNumber(1);
- * cJSON *response = mjrpc_response_error(JSON_RPC_CODE_INVALID_PARAMS, "Invalid
- * parameters", id); if (response) {
+ * cJSON *response = mjrpc_response_error(JSON_RPC_CODE_INVALID_PARAMS,
+ *                                        "Invalid parameters", id);
+ * if (response) {
  *     // Send error response...
  *     cJSON_Delete(response);
  * }
@@ -531,6 +537,7 @@ int mjrpc_destroy_handle(mjrpc_handle_t *handle);
  * @retval MJRPC_RET_ERROR_MEM_ALLOC_FAILED If memory allocation failed
  *
  * @note If a method with the same name already exists, it will be replaced
+ * @note The old arg will be freed automatically on replacement
  * @note The method_name will be copied internally
  *
  * @par Example:
@@ -560,6 +567,7 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
  *
  * @return Error code from enum mjrpc_error_return
  * @retval MJRPC_RET_OK If successful
+ * @retval MJRPC_RET_ERROR_HANDLE_NOT_INITIALIZED If handle is NULL
  * @retval MJRPC_RET_ERROR_INVALID_PARAM If method_name is NULL
  * @retval MJRPC_RET_ERROR_NOT_FOUND If method was not found
  *

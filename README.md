@@ -14,7 +14,7 @@ This project is lightweight, has minimal dependencies, and can be integrated int
 - **Hash-based Method Indexing**: Fast method lookup using double hashing algorithm
 - **Batch Requests**: Support for JSON Array batch calls
 - **Customizable Memory Management**: User-defined malloc/free/strdup hooks
-- **Thread-Safe**: Thread-local storage for memory hooks
+- **Thread-Aware**: Thread-local storage for memory hooks enables per-thread customization
 - **POSIX Array Params**: Support for both object and array parameters
 - **Method Enumeration**: Query registered methods at runtime
 - **Error Logging**: Optional error logging hooks for debugging
@@ -256,9 +256,10 @@ const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[1,2],\"id
 **A:** Use `mjrpc_enum_methods()` to get an array of method names:
 
 ```c
-cJSON *methods = mjrpc_enum_methods(handle, NULL, NULL);
-// methods is a JSON array of method name strings
-cJSON_Delete(methods);
+void print_method(const char *name, void *arg, void *user_data) {
+    printf("Method: %s\n", name);
+}
+mjrpc_enum_methods(handle, print_method, NULL);
 ```
 
 ### Q: What happens if the hash table needs to resize?
