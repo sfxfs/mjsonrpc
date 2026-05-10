@@ -116,7 +116,7 @@ static size_t next_power_of_2(size_t n) {
 static size_t hash(const char *key, size_t capacity) {
   if (key == NULL)
     return 0;
-  size_t hash_value = 5381;  /* Initial hash value (prime) */
+  size_t hash_value = 5381; /* Initial hash value (prime) */
   while (*key) {
     hash_value = ((hash_value << 5) + hash_value) + (unsigned char)(*key++);
   }
@@ -135,7 +135,7 @@ static size_t hash(const char *key, size_t capacity) {
  */
 static size_t hash2(const char *key, size_t capacity) {
   if (key == NULL || capacity <= 1)
-    return 1;  /* Minimum step size */
+    return 1; /* Minimum step size */
   size_t hash_value = 0;
   while (*key) {
     hash_value = (hash_value * HASH_MULTIPLIER2) + (unsigned char)(*key++);
@@ -145,9 +145,9 @@ static size_t hash2(const char *key, size_t capacity) {
    * step <= capacity - 1. */
   size_t step = 1 + (hash_value % (capacity - 1));
   if (step % 2 == 0)
-    step++;  /* make odd */
+    step++; /* make odd */
   if (step >= capacity)
-    step = 1;  /* defensive cap */
+    step = 1; /* defensive cap */
   return step;
 }
 
@@ -169,7 +169,8 @@ static int resize(mjrpc_handle_t *handle) {
   if (handle->methods == NULL) {
     handle->capacity = old_capacity;
     handle->methods = old_methods;
-    log_error("Hash table resize memory allocation failed", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
+    log_error("Hash table resize memory allocation failed",
+              MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
   memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
@@ -200,7 +201,8 @@ static int resize(mjrpc_handle_t *handle) {
   g_mjrpc_free(old_methods);
 
   if (rehash_failures > 0) {
-    log_error("Hash table resize completed with method failures", rehash_failures);
+    log_error("Hash table resize completed with method failures",
+              rehash_failures);
   }
   return MJRPC_RET_OK;
 }
@@ -225,11 +227,12 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
     }
     probe_count++;
     if (probe_count >= handle->capacity) {
-      break;  /* Table is full, key not found */
+      break; /* Table is full, key not found */
     }
     /* Double hashing: index = (hash1 + i * hash2) % capacity */
     if (step_size == 0) {
-      step_size = hash2(key, handle->capacity);  /* Compute step size on first probe */
+      step_size =
+          hash2(key, handle->capacity); /* Compute step size on first probe */
     }
     index = (index + step_size) % handle->capacity;
   }
@@ -258,7 +261,8 @@ static cJSON *invoke_callback(const mjrpc_handle_t *handle,
   returned = func(&ctx, params, id);
   if (ctx.error_code) {
     cJSON_Delete(returned);
-    cJSON *err_resp = mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    cJSON *err_resp =
+        mjrpc_response_error(ctx.error_code, ctx.error_message, id);
     if (err_resp && ctx.error_data) {
       cJSON *error = cJSON_GetObjectItem(err_resp, "error");
       if (error) {
@@ -308,8 +312,7 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
         strcmp("2.0", version->valuestring) != 0)
       return mjrpc_response_error(
           JSON_RPC_CODE_INVALID_REQUEST,
-          "Invalid request received: JSONRPC version error.",
-          id_copy);
+          "Invalid request received: JSONRPC version error.", id_copy);
 
     const cJSON *method = cJSON_GetObjectItem(request, "method");
     if (method != NULL && method->type == cJSON_String) {
@@ -324,16 +327,14 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
       return invoke_callback(handle, method->valuestring, params, id_copy,
                              actual_params_type);
     }
-    return mjrpc_response_error(
-        JSON_RPC_CODE_INVALID_REQUEST,
-        "Invalid request received: No 'method' member.",
-        id_copy);
+    return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                "Invalid request received: No 'method' member.",
+                                id_copy);
   }
   // Invalid id type
   return mjrpc_response_error(
       JSON_RPC_CODE_INVALID_REQUEST,
-      "Invalid request received: 'id' member type error.",
-      cJSON_CreateNull());
+      "Invalid request received: 'id' member type error.", cJSON_CreateNull());
 }
 
 static cJSON *rpc_handle_ary_req(const mjrpc_handle_t *handle,
@@ -507,24 +508,28 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
     }
     probe_count++;
     if (probe_count >= handle->capacity) {
-      break;  /* Table is full, should not happen with resize */
+      break; /* Table is full, should not happen with resize */
     }
     /* Double hashing: index = (hash1 + i * hash2) % capacity */
     if (step_size == 0) {
-      step_size = hash2(method_name, handle->capacity);  /* Compute step size on first probe */
+      step_size = hash2(
+          method_name, handle->capacity); /* Compute step size on first probe */
     }
     index = (index + step_size) % handle->capacity;
   }
 
-  /* Check if hash table is full (shouldn't happen with resize, but safety check) */
+  /* Check if hash table is full (shouldn't happen with resize, but safety
+   * check) */
   if (probe_count >= handle->capacity) {
-    log_error("Hash table full during add_method (should not happen)", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
+    log_error("Hash table full during add_method (should not happen)",
+              MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
 
   handle->methods[index].name = g_mjrpc_strdup(method_name);
   if (handle->methods[index].name == NULL) {
-    log_error("strdup failed during add_method", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
+    log_error("strdup failed during add_method",
+              MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
   handle->methods[index].func = function_pointer;
@@ -561,11 +566,12 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
     }
     probe_count++;
     if (probe_count >= handle->capacity) {
-      break;  /* Table is full, key not found */
+      break; /* Table is full, key not found */
     }
     /* Double hashing: index = (hash1 + i * hash2) % capacity */
     if (step_size == 0) {
-      step_size = hash2(name, handle->capacity);  /* Compute step size on first probe */
+      step_size =
+          hash2(name, handle->capacity); /* Compute step size on first probe */
     }
     index = (index + step_size) % handle->capacity;
   }
@@ -654,8 +660,7 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
       ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
       cjson_return = mjrpc_response_error(
           JSON_RPC_CODE_INVALID_REQUEST,
-          "Invalid request received: Empty JSON array.",
-          cJSON_CreateNull());
+          "Invalid request received: Empty JSON array.", cJSON_CreateNull());
     } else {
       cjson_return = rpc_handle_ary_req(handle, request_cjson, array_size);
       if (cjson_return)
@@ -668,8 +673,7 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
       ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
       cjson_return = mjrpc_response_error(
           JSON_RPC_CODE_INVALID_REQUEST,
-          "Invalid request received: Empty JSON object.",
-          cJSON_CreateNull());
+          "Invalid request received: Empty JSON object.", cJSON_CreateNull());
     } else {
       cjson_return = rpc_handle_obj_req(handle, request_cjson);
       if (cjson_return)
