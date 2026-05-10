@@ -27,7 +27,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 /*--- memory management hooks ---*/
 
@@ -84,6 +83,28 @@ enum method_state { EMPTY, OCCUPIED, DELETED };
 #define HASH_MULTIPLIER2 17
 
 /**
+ * @brief Round a size_t up to the next power of two
+ * @param n Value to round up (0 returns 1)
+ * @return Next power of two >= n
+ * @internal
+ */
+static size_t next_power_of_2(size_t n) {
+  if (n == 0)
+    return 1;
+  n--;
+  n |= n >> 1;
+  n |= n >> 2;
+  n |= n >> 4;
+  n |= n >> 8;
+  n |= n >> 16;
+#if SIZE_MAX > 0xFFFFFFFF
+  n |= n >> 32;
+#endif
+  n++;
+  return n;
+}
+
+/**
  * @brief Compute hash value for a string key using djb2 algorithm
  * @param key String key to hash (must not be NULL for valid hash)
  * @param capacity Hash table capacity
@@ -95,7 +116,7 @@ enum method_state { EMPTY, OCCUPIED, DELETED };
 static size_t hash(const char *key, size_t capacity) {
   if (key == NULL)
     return 0;
-  size_t hash_value = 5381;  /* Initial hash value (prime) */
+  size_t hash_value = 5381; /* Initial hash value (prime) */
   while (*key) {
     hash_value = ((hash_value << 5) + hash_value) + (unsigned char)(*key++);
   }
@@ -105,21 +126,29 @@ static size_t hash(const char *key, size_t capacity) {
 /**
  * @brief Compute second hash value for double hashing
  * @param key String key to hash
- * @param capacity Hash table capacity
- * @return Second hash value for probe step size
+ * @param capacity Hash table capacity (must be a power of two)
+ * @return Second hash value for probe step size in range [1, capacity-1]
  *
- * @note Returns a prime-based hash for use as step size in double hashing
- *       Ensures step size is relatively prime to table capacity
+ * @note The returned step is forced to be odd. An odd step is always
+ *       coprime with a power-of-two capacity, guaranteeing the probe
+ *       sequence visits every slot before repeating.
  */
 static size_t hash2(const char *key, size_t capacity) {
-  if (key == NULL)
-    return 1;  /* Minimum step size */
+  if (key == NULL || capacity <= 1)
+    return 1; /* Minimum step size */
   size_t hash_value = 0;
   while (*key) {
     hash_value = (hash_value * HASH_MULTIPLIER2) + (unsigned char)(*key++);
   }
-  /* Return value in range [1, capacity-1] to ensure valid probe step */
-  return 1 + (hash_value % (capacity - 1));
+  /* Step in [1, capacity-1]; force odd so it is coprime with any
+   * power-of-two capacity.  With power-of-two cap, this always yields
+   * step <= capacity - 1. */
+  size_t step = 1 + (hash_value % (capacity - 1));
+  if (step % 2 == 0)
+    step++; /* make odd */
+  if (step >= capacity)
+    step = 1; /* defensive cap */
+  return step;
 }
 
 static int resize(mjrpc_handle_t *handle) {
@@ -140,7 +169,8 @@ static int resize(mjrpc_handle_t *handle) {
   if (handle->methods == NULL) {
     handle->capacity = old_capacity;
     handle->methods = old_methods;
-    log_error("Hash table resize memory allocation failed", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
+    log_error("Hash table resize memory allocation failed",
+              MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
   memset(handle->methods, 0, handle->capacity * sizeof(struct mjrpc_method));
@@ -163,13 +193,16 @@ static int resize(mjrpc_handle_t *handle) {
         /* Continue with remaining methods instead of aborting */
         continue;
       }
-      /* name_copy and arg_copy now owned by new entry, don't free them */
+      /* mjrpc_add_method strdups the name, so free our copy.
+       * arg_copy is now owned by the new entry, do not free it. */
+      g_mjrpc_free(name_copy);
     }
   }
   g_mjrpc_free(old_methods);
 
   if (rehash_failures > 0) {
-    log_error("Hash table resize completed with method failures", rehash_failures);
+    log_error("Hash table resize completed with method failures",
+              rehash_failures);
   }
   return MJRPC_RET_OK;
 }
@@ -194,11 +227,12 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
     }
     probe_count++;
     if (probe_count >= handle->capacity) {
-      break;  /* Table is full, key not found */
+      break; /* Table is full, key not found */
     }
     /* Double hashing: index = (hash1 + i * hash2) % capacity */
     if (step_size == 0) {
-      step_size = hash2(key, handle->capacity);  /* Compute step size on first probe */
+      step_size =
+          hash2(key, handle->capacity); /* Compute step size on first probe */
     }
     index = (index + step_size) % handle->capacity;
   }
@@ -217,18 +251,37 @@ static cJSON *invoke_callback(const mjrpc_handle_t *handle,
   mjrpc_func_ctx_t ctx = {0};
   ctx.error_code = 0;
   ctx.error_message = NULL;
+  ctx.error_data = NULL;
   ctx.params_type = params_type;
-  if (!method_get((mjrpc_handle_t *)handle, method_name, &func, &arg) ||
-      !func) {
+  if (!method_get(handle, method_name, &func, &arg) || !func) {
     return mjrpc_response_error(JSON_RPC_CODE_METHOD_NOT_FOUND,
-                                g_mjrpc_strdup("Method not found."), id);
+                                "Method not found.", id);
   }
   ctx.data = arg;
   returned = func(&ctx, params, id);
   if (ctx.error_code) {
     cJSON_Delete(returned);
-    return mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    cJSON *err_resp =
+        mjrpc_response_error(ctx.error_code, ctx.error_message, id);
+    if (err_resp && ctx.error_data) {
+      cJSON *error = cJSON_GetObjectItem(err_resp, "error");
+      if (error) {
+        if (!cJSON_AddItemToObject(error, "data", ctx.error_data)) {
+          cJSON_Delete(ctx.error_data);
+        }
+      } else {
+        cJSON_Delete(ctx.error_data);
+      }
+    } else if (ctx.error_data) {
+      cJSON_Delete(ctx.error_data);
+    }
+    g_mjrpc_free(ctx.error_message);
+    return err_resp;
   }
+  if (ctx.error_data) {
+    cJSON_Delete(ctx.error_data);
+  }
+  g_mjrpc_free(ctx.error_message);
   return mjrpc_response_ok(returned, id);
 }
 
@@ -259,8 +312,7 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
         strcmp("2.0", version->valuestring) != 0)
       return mjrpc_response_error(
           JSON_RPC_CODE_INVALID_REQUEST,
-          g_mjrpc_strdup("Invalid request received: JSONRPC version error."),
-          id_copy);
+          "Invalid request received: JSONRPC version error.", id_copy);
 
     const cJSON *method = cJSON_GetObjectItem(request, "method");
     if (method != NULL && method->type == cJSON_String) {
@@ -275,16 +327,14 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
       return invoke_callback(handle, method->valuestring, params, id_copy,
                              actual_params_type);
     }
-    return mjrpc_response_error(
-        JSON_RPC_CODE_INVALID_REQUEST,
-        g_mjrpc_strdup("Invalid request received: No 'method' member."),
-        id_copy);
+    return mjrpc_response_error(JSON_RPC_CODE_INVALID_REQUEST,
+                                "Invalid request received: No 'method' member.",
+                                id_copy);
   }
   // Invalid id type
   return mjrpc_response_error(
       JSON_RPC_CODE_INVALID_REQUEST,
-      g_mjrpc_strdup("Invalid request received: 'id' member type error."),
-      cJSON_CreateNull());
+      "Invalid request received: 'id' member type error.", cJSON_CreateNull());
 }
 
 static cJSON *rpc_handle_ary_req(const mjrpc_handle_t *handle,
@@ -370,9 +420,6 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id) {
   cJSON *result_root = cJSON_CreateObject();
   cJSON *error_root = cJSON_CreateObject();
   if (result_root == NULL || error_root == NULL || id == NULL) {
-    if (message)
-      g_mjrpc_free(
-          (void *)message); // Free the message string if it was allocated
     cJSON_Delete(id);
     cJSON_Delete(error_root);
     cJSON_Delete(result_root);
@@ -382,8 +429,6 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id) {
   cJSON_AddNumberToObject(error_root, "code", code);
   if (message) {
     cJSON_AddStringToObject(error_root, "message", message);
-    g_mjrpc_free(
-        (void *)message); // Free the message string after adding to JSON
   } else
     cJSON_AddStringToObject(error_root, "message", "No message here.");
 
@@ -398,6 +443,7 @@ mjrpc_handle_t *mjrpc_create_handle(size_t initial_capacity) {
   init_memory_hooks_if_needed();
   if (initial_capacity == 0)
     initial_capacity = DEFAULT_INITIAL_CAPACITY;
+  initial_capacity = next_power_of_2(initial_capacity);
   mjrpc_handle_t *handle = g_mjrpc_malloc(sizeof(mjrpc_handle_t));
   if (handle == NULL)
     return NULL;
@@ -462,24 +508,28 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
     }
     probe_count++;
     if (probe_count >= handle->capacity) {
-      break;  /* Table is full, should not happen with resize */
+      break; /* Table is full, should not happen with resize */
     }
     /* Double hashing: index = (hash1 + i * hash2) % capacity */
     if (step_size == 0) {
-      step_size = hash2(method_name, handle->capacity);  /* Compute step size on first probe */
+      step_size = hash2(
+          method_name, handle->capacity); /* Compute step size on first probe */
     }
     index = (index + step_size) % handle->capacity;
   }
 
-  /* Check if hash table is full (shouldn't happen with resize, but safety check) */
+  /* Check if hash table is full (shouldn't happen with resize, but safety
+   * check) */
   if (probe_count >= handle->capacity) {
-    log_error("Hash table full during add_method (should not happen)", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
+    log_error("Hash table full during add_method (should not happen)",
+              MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
 
   handle->methods[index].name = g_mjrpc_strdup(method_name);
   if (handle->methods[index].name == NULL) {
-    log_error("strdup failed during add_method", MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
+    log_error("strdup failed during add_method",
+              MJRPC_RET_ERROR_MEM_ALLOC_FAILED);
     return MJRPC_RET_ERROR_MEM_ALLOC_FAILED;
   }
   handle->methods[index].func = function_pointer;
@@ -516,11 +566,12 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
     }
     probe_count++;
     if (probe_count >= handle->capacity) {
-      break;  /* Table is full, key not found */
+      break; /* Table is full, key not found */
     }
     /* Double hashing: index = (hash1 + i * hash2) % capacity */
     if (step_size == 0) {
-      step_size = hash2(name, handle->capacity);  /* Compute step size on first probe */
+      step_size =
+          hash2(name, handle->capacity); /* Compute step size on first probe */
     }
     index = (index + step_size) % handle->capacity;
   }
@@ -560,8 +611,7 @@ char *mjrpc_process_str(const mjrpc_handle_t *handle, const char *request_str,
     }
     cJSON *error_resp = mjrpc_response_error(
         JSON_RPC_CODE_PARSE_ERROR,
-        g_mjrpc_strdup(
-            "Invalid request received: Not a JSON formatted request."),
+        "Invalid request received: Not a JSON formatted request.",
         cJSON_CreateNull());
     if (error_resp) {
       char *response_str = cJSON_PrintUnformatted(error_resp);
@@ -599,8 +649,7 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
       *ret_code = ret;
     return mjrpc_response_error(
         JSON_RPC_CODE_PARSE_ERROR,
-        g_mjrpc_strdup(
-            "Invalid request received: Not a JSON formatted request."),
+        "Invalid request received: Not a JSON formatted request.",
         cJSON_CreateNull());
   }
 
@@ -610,9 +659,8 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
     if (array_size <= 0) {
       ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
       cjson_return = mjrpc_response_error(
-          JSON_RPC_CODE_PARSE_ERROR,
-          g_mjrpc_strdup("Invalid request received: Empty JSON array."),
-          cJSON_CreateNull());
+          JSON_RPC_CODE_INVALID_REQUEST,
+          "Invalid request received: Empty JSON array.", cJSON_CreateNull());
     } else {
       cjson_return = rpc_handle_ary_req(handle, request_cjson, array_size);
       if (cjson_return)
@@ -621,14 +669,11 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
         ret = MJRPC_RET_OK_NOTIFICATION;
     }
   } else if (request_cjson->type == cJSON_Object) {
-    // Check if the object is empty by checking if it has any children
-    const int obj_size = (request_cjson->child != NULL) ? 1 : 0;
-    if (obj_size <= 0) {
+    if (request_cjson->child == NULL) {
       ret = MJRPC_RET_ERROR_EMPTY_REQUEST;
       cjson_return = mjrpc_response_error(
-          JSON_RPC_CODE_PARSE_ERROR,
-          g_mjrpc_strdup("Invalid request received: Empty JSON object."),
-          cJSON_CreateNull());
+          JSON_RPC_CODE_INVALID_REQUEST,
+          "Invalid request received: Empty JSON object.", cJSON_CreateNull());
     } else {
       cjson_return = rpc_handle_obj_req(handle, request_cjson);
       if (cjson_return)
@@ -638,8 +683,8 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
     }
   } else {
     cjson_return = mjrpc_response_error(
-        JSON_RPC_CODE_PARSE_ERROR,
-        g_mjrpc_strdup("Invalid request received: Not a JSON object or array."),
+        JSON_RPC_CODE_INVALID_REQUEST,
+        "Invalid request received: Not a JSON object or array.",
         cJSON_CreateNull());
     ret = MJRPC_RET_ERROR_NOT_OBJ_ARY;
   }

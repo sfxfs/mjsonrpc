@@ -9,6 +9,10 @@ project(mjsonrpc
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
+endif()
+
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/output/lib)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/output)
 
