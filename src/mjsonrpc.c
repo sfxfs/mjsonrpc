@@ -24,6 +24,8 @@
 
 #include "mjsonrpc.h"
 
+#include <ctype.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -120,7 +122,7 @@ static size_t hash(const char *key, size_t capacity) {
   while (*key) {
     hash_value = ((hash_value << 5) + hash_value) + (unsigned char)(*key++);
   }
-  return hash_value % capacity;
+  return hash_value & (capacity - 1);
 }
 
 /**
@@ -229,12 +231,12 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
     if (probe_count >= handle->capacity) {
       break; /* Table is full, key not found */
     }
-    /* Double hashing: index = (hash1 + i * hash2) % capacity */
+    /* Capacity is a power of two, so masking avoids integer division. */
     if (step_size == 0) {
       step_size =
           hash2(key, handle->capacity); /* Compute step size on first probe */
     }
-    index = (index + step_size) % handle->capacity;
+    index = (index + step_size) & (handle->capacity - 1);
   }
   return false;
 }
@@ -244,7 +246,6 @@ static bool method_get(const mjrpc_handle_t *handle, const char *key,
 static cJSON *invoke_callback(const mjrpc_handle_t *handle,
                               const char *method_name, cJSON *params, cJSON *id,
                               int params_type) {
-  init_memory_hooks_if_needed();
   cJSON *returned = NULL;
   mjrpc_func func = NULL;
   void *arg = NULL;
@@ -285,10 +286,44 @@ static cJSON *invoke_callback(const mjrpc_handle_t *handle,
   return mjrpc_response_ok(returned, id);
 }
 
+static bool key_equals_ignore_case(const char *left, const char *right) {
+  while (tolower((unsigned char)*left) == tolower((unsigned char)*right)) {
+    if (*left == '\0')
+      return true;
+    left++;
+    right++;
+  }
+  return false;
+}
+
 static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
                                  const cJSON *request) {
-  init_memory_hooks_if_needed();
-  cJSON *id = cJSON_GetObjectItem(request, "id");
+  cJSON *id = NULL;
+  const cJSON *version = NULL;
+  const cJSON *method = NULL;
+  cJSON *params = NULL;
+  for (cJSON *item = request->child; item != NULL; item = item->next) {
+    if (item->string == NULL)
+      continue;
+    switch (tolower((unsigned char)item->string[0])) {
+    case 'i':
+      if (id == NULL && key_equals_ignore_case(item->string, "id"))
+        id = item;
+      break;
+    case 'j':
+      if (version == NULL && key_equals_ignore_case(item->string, "jsonrpc"))
+        version = item;
+      break;
+    case 'm':
+      if (method == NULL && key_equals_ignore_case(item->string, "method"))
+        method = item;
+      break;
+    case 'p':
+      if (params == NULL && key_equals_ignore_case(item->string, "params"))
+        params = item;
+      break;
+    }
+  }
 
 #ifdef cJSON_Int
   if (id == NULL || id->type == cJSON_NULL || id->type == cJSON_String ||
@@ -307,17 +342,14 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
                       ? cJSON_CreateString(id->valuestring)
                       : cJSON_CreateNumber(id->valuedouble);
     }
-    const cJSON *version = cJSON_GetObjectItem(request, "jsonrpc");
+
     if (version == NULL || version->type != cJSON_String ||
         strcmp("2.0", version->valuestring) != 0)
       return mjrpc_response_error(
           JSON_RPC_CODE_INVALID_REQUEST,
           "Invalid request received: JSONRPC version error.", id_copy);
 
-    const cJSON *method = cJSON_GetObjectItem(request, "method");
     if (method != NULL && method->type == cJSON_String) {
-      cJSON *params = cJSON_GetObjectItem(request, "params");
-
       // Determine params type: 0=object, 1=array, 2=no params
       int actual_params_type = 2; // no params by default
       if (params != NULL) {
@@ -338,11 +370,11 @@ static cJSON *rpc_handle_obj_req(const mjrpc_handle_t *handle,
 }
 
 static cJSON *rpc_handle_ary_req(const mjrpc_handle_t *handle,
-                                 const cJSON *request, const int array_size) {
+                                 const cJSON *request) {
   int valid_reqs = 0;
   cJSON *return_json_array = cJSON_CreateArray();
-  for (int i = 0; i < array_size; i++) {
-    cJSON *obj_req = rpc_handle_obj_req(handle, cJSON_GetArrayItem(request, i));
+  for (const cJSON *item = request->child; item != NULL; item = item->next) {
+    cJSON *obj_req = rpc_handle_obj_req(handle, item);
     if (obj_req) {
       cJSON_AddItemToArray(return_json_array, obj_req);
       valid_reqs++;
@@ -407,9 +439,10 @@ cJSON *mjrpc_response_ok(cJSON *result, cJSON *id) {
     return NULL;
   }
 
-  cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
-  cJSON_AddItemToObject(result_root, "result", result);
-  cJSON_AddItemToObject(result_root, "id", id);
+  cJSON_AddItemToObjectCS(result_root, "jsonrpc",
+                          cJSON_CreateStringReference("2.0"));
+  cJSON_AddItemToObjectCS(result_root, "result", result);
+  cJSON_AddItemToObjectCS(result_root, "id", id);
 
   return result_root;
 }
@@ -426,15 +459,15 @@ cJSON *mjrpc_response_error(int code, const char *message, cJSON *id) {
     return NULL;
   }
 
-  cJSON_AddNumberToObject(error_root, "code", code);
-  if (message) {
-    cJSON_AddStringToObject(error_root, "message", message);
-  } else
-    cJSON_AddStringToObject(error_root, "message", "No message here.");
+  cJSON_AddItemToObjectCS(error_root, "code", cJSON_CreateNumber(code));
+  cJSON_AddItemToObjectCS(
+      error_root, "message",
+      cJSON_CreateString(message ? message : "No message here."));
 
-  cJSON_AddStringToObject(result_root, "jsonrpc", "2.0");
-  cJSON_AddItemToObject(result_root, "error", error_root);
-  cJSON_AddItemToObject(result_root, "id", id);
+  cJSON_AddItemToObjectCS(result_root, "jsonrpc",
+                          cJSON_CreateStringReference("2.0"));
+  cJSON_AddItemToObjectCS(result_root, "error", error_root);
+  cJSON_AddItemToObjectCS(result_root, "id", id);
 
   return result_root;
 }
@@ -510,12 +543,12 @@ int mjrpc_add_method(mjrpc_handle_t *handle, mjrpc_func function_pointer,
     if (probe_count >= handle->capacity) {
       break; /* Table is full, should not happen with resize */
     }
-    /* Double hashing: index = (hash1 + i * hash2) % capacity */
+    /* Capacity is a power of two, so masking avoids integer division. */
     if (step_size == 0) {
       step_size = hash2(
           method_name, handle->capacity); /* Compute step size on first probe */
     }
-    index = (index + step_size) % handle->capacity;
+    index = (index + step_size) & (handle->capacity - 1);
   }
 
   /* Check if hash table is full (shouldn't happen with resize, but safety
@@ -568,12 +601,12 @@ int mjrpc_del_method(mjrpc_handle_t *handle, const char *name) {
     if (probe_count >= handle->capacity) {
       break; /* Table is full, key not found */
     }
-    /* Double hashing: index = (hash1 + i * hash2) % capacity */
+    /* Capacity is a power of two, so masking avoids integer division. */
     if (step_size == 0) {
       step_size =
           hash2(name, handle->capacity); /* Compute step size on first probe */
     }
-    index = (index + step_size) % handle->capacity;
+    index = (index + step_size) & (handle->capacity - 1);
   }
   return MJRPC_RET_ERROR_NOT_FOUND;
 }
@@ -625,7 +658,11 @@ char *mjrpc_process_str(const mjrpc_handle_t *handle, const char *request_str,
   cJSON_Delete(request);
 
   if (response) {
-    char *response_str = cJSON_PrintUnformatted(response);
+    const size_t request_length = strlen(request_str);
+    char *response_str =
+        request_length < INT_MAX
+            ? cJSON_PrintBuffered(response, (int)request_length + 1, false)
+            : cJSON_PrintUnformatted(response);
     cJSON_Delete(response);
     return response_str;
   }
@@ -662,7 +699,7 @@ cJSON *mjrpc_process_cjson(const mjrpc_handle_t *handle,
           JSON_RPC_CODE_INVALID_REQUEST,
           "Invalid request received: Empty JSON array.", cJSON_CreateNull());
     } else {
-      cjson_return = rpc_handle_ary_req(handle, request_cjson, array_size);
+      cjson_return = rpc_handle_ary_req(handle, request_cjson);
       if (cjson_return)
         ret = MJRPC_RET_OK;
       else
