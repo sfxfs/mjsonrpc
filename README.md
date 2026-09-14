@@ -223,6 +223,21 @@ int main() {
 
 *Tested on Intel i7, 3.2GHz, single-threaded*
 
+### Benchmark Suite
+
+A reproducible benchmark suite measuring speed, memory usage and process
+resource usage lives in [`benchmark/`](benchmark/README.md):
+
+```bash
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DMJSONRPC_BUILD_BENCHMARKS=ON
+cmake --build build-bench
+./output/mjsonrpc-benchmark --check
+```
+
+It runs on every push / pull request in CI (see
+`.github/workflows/benchmark.yml`), reports regressions against a stored
+baseline and enforces memory-leak and speed-floor self checks.
+
 ## FAQ
 
 ### Q: Is mjsonrpc thread-safe?

@@ -26,6 +26,12 @@ add_subdirectory(example)
 enable_testing()
 add_subdirectory(test)
 
+# Optional performance benchmark suite (see benchmark/README.md)
+option(MJSONRPC_BUILD_BENCHMARKS "Build the performance benchmark suite" OFF)
+if(MJSONRPC_BUILD_BENCHMARKS)
+    add_subdirectory(benchmark)
+endif()
+
 # Add uninstall target
 if(NOT TARGET uninstall)
     configure_file(

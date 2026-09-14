@@ -1,0 +1,128 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: 'Quick run (fewer samples, shorter calibration)'
+        type: boolean
+        default: false
+      update_baseline:
+        description: 'Update benchmark/baseline.json from this run and commit it'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Performance Benchmark (Release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake gcc python3 binutils
+
+      - name: Configure (Release, benchmarks enabled)
+        run: >
+          cmake -S . -B build-bench
+          -DCMAKE_BUILD_TYPE=Release
+          -DMJSONRPC_BUILD_BENCHMARKS=ON
+
+      - name: Build
+        run: cmake --build build-bench --parallel $(nproc)
+
+      - name: Collect artifact sizes
+        run: |
+          {
+            echo "## Build artifacts"
+            echo ""
+            echo "| Artifact | Size |"
+            echo "|---|---:|"
+            for f in output/lib/libmjsonrpc.so output/lib/libcJSON.so output/mjsonrpc-benchmark; do
+              if [ -e "$f" ]; then
+                real=$(readlink -f "$f" 2>/dev/null || echo "$f")
+                echo "| $(basename "$real") | $(stat -c%s "$f") bytes |"
+              fi
+            done
+            echo ""
+            echo '```'
+            size output/lib/libmjsonrpc.so output/lib/libcJSON.so output/mjsonrpc-benchmark 2>/dev/null || true
+            echo '```'
+          } > artifact-size.md
+          cat artifact-size.md
+
+      - name: Run benchmarks
+        run: |
+          ARGS="--json benchmark-results.json --markdown benchmark-summary.md --check"
+          if [ "${{ inputs.quick }}" = "true" ]; then
+            ARGS="$ARGS --quick"
+          fi
+          ./output/mjsonrpc-benchmark $ARGS
+          echo "---"
+          cat benchmark-summary.md
+
+      - name: Compare with baseline
+        id: compare
+        run: |
+          python3 benchmark/tools/compare_bench.py \
+            --baseline benchmark/baseline.json \
+            --current benchmark-results.json \
+            --summary-md compare-summary.md \
+            --warn-pct 20 \
+            --fail-pct 50
+        continue-on-error: true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            cat benchmark-summary.md 2>/dev/null || echo "_benchmark results unavailable_"
+            echo
+            cat compare-summary.md 2>/dev/null || true
+            echo
+            cat artifact-size.md 2>/dev/null || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmark-results.json
+            benchmark-summary.md
+            compare-summary.md
+            artifact-size.md
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Fail on hard regression
+        if: always() && steps.compare.outcome == 'failure'
+        run: |
+          echo "::error::Hard performance regression detected - see the comparison table in the job summary"
+          exit 1
+
+      - name: Update baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        run: |
+          mkdir -p benchmark
+          cp benchmark-results.json benchmark/baseline.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add benchmark/baseline.json
+          git commit -m "chore(benchmark): update baseline [skip ci]" || echo "baseline unchanged"
+          git push

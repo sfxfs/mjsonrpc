@@ -69,6 +69,18 @@ int main() {
 }
 ```
 
+### 性能基准测试
+
+项目内置可复现的性能基准测试（速度 / 内存占用 / 进程资源占用），位于 [`benchmark/`](benchmark/README.md)：
+
+```bash
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DMJSONRPC_BUILD_BENCHMARKS=ON
+cmake --build build-bench
+./output/mjsonrpc-benchmark --check
+```
+
+CI 在每次 push / PR 时自动运行（见 `.github/workflows/benchmark.yml`），与基准基线对比检测性能回归，并执行内存泄漏与速度下限自检。
+
 ### 参考
 
 - [DaveGamble/cJSON](https://github.com/DaveGamble/cJSON)

@@ -51,6 +51,12 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# Benchmark outputs
+benchmark-results.json
+benchmark-summary.md
+compare-summary.md
+artifact-size.md
+
 # Personal editor config files
 .idea/
 .vscode/
