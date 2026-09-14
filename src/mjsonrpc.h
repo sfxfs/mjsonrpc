@@ -156,6 +156,9 @@ typedef cJSON *(*mjrpc_func)(mjrpc_func_ctx_t *context, cJSON *params,
  * @struct mjrpc_method
  * @brief Internal structure representing a registered RPC method
  * @internal
+ *
+ * @note Slot bookkeeping (empty / occupied / deleted) is kept in a parallel
+ *       byte array owned by the handle, so only the payload lives here.
  */
 struct mjrpc_method {
   /** @brief Method name */
@@ -166,9 +169,6 @@ struct mjrpc_method {
 
   /** @brief User argument passed to the function */
   void *arg;
-
-  /** @brief Internal state for hash table management */
-  int state;
 };
 
 /**
